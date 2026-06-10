@@ -10,7 +10,7 @@ function calcDerived(fields) {
     const presentDays = fields.workingDays - fields.absentDays;
     const perDayRate = (fields.perDayPayment || 0) > 0 ? fields.perDayPayment : 0;
     const perDaysSalary = perDayRate > 0 ? perDayRate : (TOTAL_MONTH_DAYS > 0 ? +((fields.basic || 0) / TOTAL_MONTH_DAYS).toFixed(2) : 0);
-    const overTime = perDaysSalary > 0 ? +((perDaysSalary / 12) * (fields.otHours || 0) * 1.5).toFixed(2) : 0;
+    const overTime = fields.overTime || 0;
     const grossSalary = +((fields.basic || 0) + (fields.houseRent || 0) + (fields.food || 0) + (fields.commission || 0) + overTime).toFixed(2);
     const absentCost = +((fields.absentDays || 0) * perDaysSalary).toFixed(2);
     const totalDeduction = +((fields.loanAdjust || 0) + absentCost + (fields.iqamaCost || 0) + (fields.fine || 0)).toFixed(2);

@@ -154,8 +154,9 @@ export const initialAccessRequests = [
 function calcRow(fields) {
 	const totalMonthDays = 31
 	const presentDays = fields.workingDays - fields.absentDays
-	const perDaysSalary = +(fields.basic / totalMonthDays).toFixed(2)
-	const overTime = +((perDaysSalary / 12) * fields.otHours * 1.5).toFixed(2)
+	const perDayRate = (fields.perDayPayment ?? 0) > 0 ? fields.perDayPayment : 0
+	const perDaysSalary = perDayRate > 0 ? perDayRate : +(fields.basic / totalMonthDays).toFixed(2)
+	const overTime = fields.overTime ?? 0
 	const grossSalary = +(fields.basic + fields.houseRent + fields.food + fields.commission + overTime).toFixed(2)
 	const absentCost = +(fields.absentDays * perDaysSalary).toFixed(2)
 	const totalDeduction = +(fields.loanAdjust + absentCost + fields.iqamaCost + fields.fine).toFixed(2)

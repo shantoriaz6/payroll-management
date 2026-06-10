@@ -12,7 +12,6 @@ function recalcRow(fields) {
 	const hr = fields.houseRent ?? 0
 	const fd = fields.food ?? 0
 	const comm = fields.commission ?? 0
-	const otH = fields.otHours ?? 0
 	const la = fields.loanAdjust ?? 0
 	const iq = fields.iqamaCost ?? 0
 	const fn = fields.fine ?? 0
@@ -22,7 +21,7 @@ function recalcRow(fields) {
 	const presentDays = wd - ad
 	const perDayRate = (fields.perDayPayment ?? 0) > 0 ? fields.perDayPayment : 0
 	const perDaysSalary = perDayRate > 0 ? perDayRate : (TOTAL_MONTH_DAYS > 0 ? +(basic / TOTAL_MONTH_DAYS).toFixed(2) : 0)
-	const overTime = perDaysSalary > 0 ? +((perDaysSalary / 12) * otH * 1.5).toFixed(2) : 0
+	const overTime = fields.overTime ?? 0
 	const grossSalary = +(basic + hr + fd + comm + overTime).toFixed(2)
 	const absentCost = +(ad * perDaysSalary).toFixed(2)
 	const totalDeduction = +(la + absentCost + iq + fn).toFixed(2)
@@ -33,25 +32,6 @@ function recalcRow(fields) {
 
 function sumRows(rows, key) {
 	return rows.reduce((s, r) => s + (Number(r[key]) || 0), 0)
-}
-
-function EditableCell({ row, field, onChange, align = 'right', color = 'slate' }) {
-	const val = row[field] ?? 0
-	return (
-		<input
-			type="number"
-			value={val}
-			onChange={(e) => onChange(row, field, Math.max(0, Number(e.target.value)))}
-			className={`w-full bg-transparent outline-none transition-all
-				focus:ring-2 focus:ring-amber-400/60 focus:rounded-lg focus:bg-amber-50/80 focus:px-3
-				${align === 'right' ? 'text-right' : 'text-left'}
-				${color === 'rose' ? 'text-rose-600' : color === 'amber' ? 'text-amber-700' : color === 'emerald' ? 'text-emerald-700' : 'text-slate-700'}
-				hover:bg-slate-100/50 rounded px-3 py-2 text-base leading-7
-				[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`}
-			min="0"
-			step="any"
-		/>
-	)
 }
 
 function getRowId(row) {
@@ -96,6 +76,8 @@ function Payroll() {
 	const { payrollRows, setPayrollRows } = useOutletContext()
 
 	const [adding, setAdding] = useState(false)
+	const [editingRow, setEditingRow] = useState(null)
+	const [editForm, setEditForm] = useState(null)
 	const [form, setForm] = useState({
 		name: '', joiningDate: '', designation: '', kafalaStatus: 'Under Kafala', branchName: '',
 		basic: 0, houseRent: 0, food: 0, commission: 0, perDayPayment: 0,
@@ -107,22 +89,36 @@ function Payroll() {
 	const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(now)
 	const yearShort = String(currentYear).slice(2)
 
-	const handleFieldChange = useCallback((row, field, value) => {
-		const id = getRowId(row)
-		setPayrollRows((prev) => {
-			const updated = prev.map((r) => {
-				if (getRowId(r) !== id) return r
-				const next = { ...r, [field]: value }
-				const calc = recalcRow(next)
-				return { ...next, ...calc }
-			})
-			const changed = updated.find((r) => getRowId(r) === id)
-			if (changed?._id) {
-				payrollApi.update(changed._id, changed).catch(() => {})
-			}
-			return updated
+	const handleEditOpen = useCallback((row) => {
+		setEditForm({ ...row })
+		setEditingRow(getRowId(row))
+	}, [])
+
+	const handleEditFormChange = useCallback((field, value) => {
+		setEditForm((prev) => {
+			const next = { ...prev, [field]: value }
+			const calc = recalcRow(next)
+			return { ...next, ...calc }
 		})
-	}, [setPayrollRows])
+	}, [])
+
+	const handleEditSave = useCallback(async () => {
+		if (!editForm?._id) return
+		try {
+			await payrollApi.update(editForm._id, editForm)
+			setPayrollRows((prev) => prev.map((r) => (r._id === editForm._id ? editForm : r)))
+			setEditingRow(null)
+			setEditForm(null)
+			toast.success('Entry updated')
+		} catch {
+			toast.error('Update failed')
+		}
+	}, [editForm, setPayrollRows])
+
+	const handleEditCancel = useCallback(() => {
+		setEditingRow(null)
+		setEditForm(null)
+	}, [])
 
 	const handleGeneratePayroll = useCallback(async () => {
 		try {
@@ -283,23 +279,23 @@ function Payroll() {
 							</div>
 							<div>
 								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Basic</label>
-								<input type="number" placeholder="0" value={form.basic} onChange={(e) => setForm((p) => ({ ...p, basic: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
+								<input type="number" placeholder="0" value={form.basic || ''} onChange={(e) => setForm((p) => ({ ...p, basic: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
 							</div>
 							<div>
 								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">House Rent</label>
-								<input type="number" placeholder="0" value={form.houseRent} onChange={(e) => setForm((p) => ({ ...p, houseRent: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
+								<input type="number" placeholder="0" value={form.houseRent || ''} onChange={(e) => setForm((p) => ({ ...p, houseRent: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
 							</div>
 							<div>
 								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Food</label>
-								<input type="number" placeholder="0" value={form.food} onChange={(e) => setForm((p) => ({ ...p, food: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
+								<input type="number" placeholder="0" value={form.food || ''} onChange={(e) => setForm((p) => ({ ...p, food: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
 							</div>
 							<div>
 								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Commission</label>
-								<input type="number" placeholder="0" value={form.commission} onChange={(e) => setForm((p) => ({ ...p, commission: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
+								<input type="number" placeholder="0" value={form.commission || ''} onChange={(e) => setForm((p) => ({ ...p, commission: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
 							</div>
 							<div>
 								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Per Day Payment</label>
-								<input type="number" placeholder="0 (auto-calc from Basic)" value={form.perDayPayment} onChange={(e) => setForm((p) => ({ ...p, perDayPayment: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
+								<input type="number" placeholder="0 (auto-calc from Basic)" value={form.perDayPayment || ''} onChange={(e) => setForm((p) => ({ ...p, perDayPayment: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
 							</div>
 						</div>
 						<div className="mt-5 flex items-center gap-3">
@@ -427,7 +423,7 @@ function Payroll() {
 										Bank Pay
 									</th>
 									<th className="sticky top-[3rem] z-10 bg-indigo-50 px-3 py-3 text-center text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">
-										&nbsp;
+										Action
 									</th>
 								</tr>
 							</thead>
@@ -460,11 +456,11 @@ function Payroll() {
 												{getBranch(row)}
 											</td>
 
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="workingDays" onChange={handleFieldChange} />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-slate-800 text-sm">
+												{row.workingDays}
 											</td>
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="absentDays" onChange={handleFieldChange} color="rose" />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-rose-600 text-sm">
+												{row.absentDays}
 											</td>
 											<td className="border-b border-slate-100 px-4 py-3 text-right font-semibold text-slate-800 text-sm">
 												{row.presentDays}
@@ -472,24 +468,24 @@ function Payroll() {
 											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-slate-500 text-sm">
 												{(row.perDaysSalary ?? 0).toFixed(2)}
 											</td>
-											<td className="border-b border-r border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="otHours" onChange={handleFieldChange} />
+											<td className="border-b border-r border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-slate-800 text-sm">
+												{row.otHours}
 											</td>
-											<td className="border-b border-r border-amber-100 bg-amber-50/20 px-4 py-3">
-												<EditableCell row={row} field="advanceLoan" onChange={handleFieldChange} color="amber" />
+											<td className="border-b border-r border-amber-100 bg-amber-50/20 px-4 py-3 text-right font-mono tabular-nums text-amber-700 text-sm">
+												{(row.advanceLoan ?? 0).toFixed(2)}
 											</td>
 
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="basic" onChange={handleFieldChange} color="emerald" />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-emerald-700 text-sm">
+												{(row.basic ?? 0).toFixed(2)}
 											</td>
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="houseRent" onChange={handleFieldChange} color="emerald" />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-emerald-700 text-sm">
+												{(row.houseRent ?? 0).toFixed(2)}
 											</td>
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="food" onChange={handleFieldChange} color="emerald" />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-emerald-700 text-sm">
+												{(row.food ?? 0).toFixed(2)}
 											</td>
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="commission" onChange={handleFieldChange} color="emerald" />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-emerald-700 text-sm">
+												{(row.commission ?? 0).toFixed(2)}
 											</td>
 											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-emerald-700 text-sm">
 												{(row.overTime ?? 0).toFixed(2)}
@@ -498,17 +494,17 @@ function Payroll() {
 												{(row.grossSalary ?? 0).toFixed(2)}
 											</td>
 
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="loanAdjust" onChange={handleFieldChange} color="amber" />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-amber-700 text-sm">
+												{(row.loanAdjust ?? 0).toFixed(2)}
 											</td>
 											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-rose-600 text-sm">
 												{(row.absentCost ?? 0).toFixed(2)}
 											</td>
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="iqamaCost" onChange={handleFieldChange} color="rose" />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-rose-700 text-sm">
+												{(row.iqamaCost ?? 0).toFixed(2)}
 											</td>
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="fine" onChange={handleFieldChange} color="rose" />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-rose-700 text-sm">
+												{(row.fine ?? 0).toFixed(2)}
 											</td>
 											<td className="border-b border-r border-rose-100 bg-rose-50/30 px-4 py-3 text-right font-bold font-mono tabular-nums text-rose-800 text-sm">
 												{(row.totalDeduction ?? 0).toFixed(2)}
@@ -520,18 +516,28 @@ function Payroll() {
 											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-amber-700 text-sm">
 												{(row.remainingLoan ?? 0).toFixed(2)}
 											</td>
-											<td className="border-b border-slate-100 px-4 py-3">
-												<EditableCell row={row} field="bankPay" onChange={handleFieldChange} />
+											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-slate-800 text-sm">
+												{(row.bankPay ?? 0).toFixed(2)}
 											</td>
 											<td className="border-b border-slate-100 px-3 py-3 text-center">
-												<button
-													type="button"
-													onClick={() => handleDeleteEntry(row)}
-													className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-rose-100 hover:text-rose-600"
-													title="Remove entry"
-												>
-													<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
-												</button>
+												<div className="flex items-center justify-center gap-1">
+													<button
+														type="button"
+														onClick={() => handleEditOpen(row)}
+														className="rounded-md p-1.5 text-slate-400 transition-colors hover:bg-amber-100 hover:text-amber-700"
+														title="Edit entry"
+													>
+														<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+													</button>
+													<button
+														type="button"
+														onClick={() => handleDeleteEntry(row)}
+														className="rounded-md p-1.5 text-slate-300 transition-colors hover:bg-rose-100 hover:text-rose-600"
+														title="Remove entry"
+													>
+														<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" /></svg>
+													</button>
+												</div>
 											</td>
 										</tr>
 									)
@@ -573,7 +579,116 @@ function Payroll() {
 					</div>
 				</div>
 
-				<div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+				{editingRow && editForm && (
+				<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={handleEditCancel}>
+					<div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-slate-200 bg-white p-8 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+						<div className="flex items-center justify-between">
+							<div className="flex items-center gap-3">
+								<svg className="h-6 w-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+								<span className="text-xl font-bold text-slate-900">{getEmployeeName(editForm)} — Edit Salary Entry</span>
+							</div>
+							<button onClick={handleEditCancel} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+								<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+							</button>
+						</div>
+
+						<div className="mt-6 grid gap-6 sm:grid-cols-3">
+							<div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+								<p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Attendance</p>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-slate-500">Work Days</label>
+									<input type="number" value={editForm.workingDays || ''} onChange={(e) => handleEditFormChange('workingDays', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-slate-500">Absent Days</label>
+									<input type="number" value={editForm.absentDays || ''} onChange={(e) => handleEditFormChange('absentDays', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-slate-500">OT Hours</label>
+									<input type="number" step="any" value={editForm.otHours || ''} onChange={(e) => handleEditFormChange('otHours', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-slate-500">Advance Loan</label>
+									<input type="number" step="any" value={editForm.advanceLoan || ''} onChange={(e) => handleEditFormChange('advanceLoan', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-amber-200 px-4 py-2.5 text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
+								</div>
+							</div>
+
+							<div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/30 p-4">
+								<p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600">Earnings</p>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-emerald-600">Basic</label>
+									<input type="number" step="any" value={editForm.basic || ''} onChange={(e) => handleEditFormChange('basic', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-emerald-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-emerald-600">House Rent</label>
+									<input type="number" step="any" value={editForm.houseRent || ''} onChange={(e) => handleEditFormChange('houseRent', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-emerald-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-emerald-600">Food</label>
+									<input type="number" step="any" value={editForm.food || ''} onChange={(e) => handleEditFormChange('food', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-emerald-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-emerald-600">Commission</label>
+									<input type="number" step="any" value={editForm.commission || ''} onChange={(e) => handleEditFormChange('commission', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-emerald-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-emerald-600">O.T Pay</label>
+									<input type="number" step="any" value={editForm.overTime || ''} onChange={(e) => handleEditFormChange('overTime', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-emerald-200 px-4 py-2.5 text-sm outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-200/50" />
+								</div>
+							</div>
+
+							<div className="space-y-3 rounded-xl border border-rose-200 bg-rose-50/30 p-4">
+								<p className="text-xs font-bold uppercase tracking-[0.2em] text-rose-600">Deductions</p>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-rose-600">Loan Adjust</label>
+									<input type="number" step="any" value={editForm.loanAdjust || ''} onChange={(e) => handleEditFormChange('loanAdjust', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-rose-200 px-4 py-2.5 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-rose-600">Iqama Cost</label>
+									<input type="number" step="any" value={editForm.iqamaCost || ''} onChange={(e) => handleEditFormChange('iqamaCost', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-rose-200 px-4 py-2.5 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-rose-600">Fine</label>
+									<input type="number" step="any" value={editForm.fine || ''} onChange={(e) => handleEditFormChange('fine', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-rose-200 px-4 py-2.5 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200/50" />
+								</div>
+								<div>
+									<label className="mb-1 block text-xs font-semibold text-rose-600">Bank Pay</label>
+									<input type="number" step="any" value={editForm.bankPay || ''} onChange={(e) => handleEditFormChange('bankPay', Math.max(0, Number(e.target.value)))} className="w-full rounded-lg border border-rose-200 px-4 py-2.5 text-sm outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200/50" />
+								</div>
+							</div>
+						</div>
+
+						<div className="mt-4 grid gap-4 rounded-xl border border-indigo-200 bg-indigo-50/30 p-4 sm:grid-cols-4">
+							<div>
+								<p className="text-xs font-semibold text-indigo-500">Present Days</p>
+								<p className="text-lg font-bold text-indigo-900 font-mono">{editForm.presentDays}</p>
+							</div>
+							<div>
+								<p className="text-xs font-semibold text-indigo-500">Gross Salary</p>
+								<p className="text-lg font-bold text-indigo-900 font-mono">{editForm.grossSalary?.toFixed(2)}</p>
+							</div>
+							<div>
+								<p className="text-xs font-semibold text-indigo-500">Total Deduction</p>
+								<p className="text-lg font-bold text-rose-700 font-mono">{editForm.totalDeduction?.toFixed(2)}</p>
+							</div>
+							<div>
+								<p className="text-xs font-semibold text-indigo-500">Net Payable</p>
+								<p className="text-lg font-bold text-indigo-900 font-mono">{editForm.netSalary?.toFixed(2)}</p>
+							</div>
+						</div>
+
+						<div className="mt-6 flex items-center justify-end gap-3">
+							<button onClick={handleEditCancel} className="rounded-lg px-5 py-2.5 text-sm font-semibold text-slate-500 transition-all hover:bg-slate-100">Cancel</button>
+							<button onClick={handleEditSave} className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-amber-700 hover:shadow-lg">
+								<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+								Save Changes
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
+
+			<div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
 					<div className="rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-5">
 						<p className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-600">Total Earnings</p>
 						<p className="mt-2 text-2xl font-bold text-emerald-900 font-mono tabular-nums">

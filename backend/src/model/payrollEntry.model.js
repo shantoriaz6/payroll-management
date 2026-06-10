@@ -72,6 +72,11 @@ const payrollEntrySchema = new Schema(
             type: Number,
             default: 0,
         },
+        paymentStatus: {
+            type: String,
+            enum: ['paid', 'unpaid'],
+            default: 'unpaid',
+        },
         presentDays: {
             type: Number,
             default: 0,

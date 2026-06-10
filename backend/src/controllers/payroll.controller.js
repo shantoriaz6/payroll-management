@@ -46,13 +46,19 @@ const getPayrollEntryById = asyncHandler(async (req, res) => {
 });
 
 const updatePayrollEntry = asyncHandler(async (req, res) => {
-    const derived = calcDerived(req.body);
+    const existing = await PayrollEntry.findById(req.params.id);
+    if (!existing) throw new apiError(404, 'Payroll entry not found');
+
+    const merged = { ...existing.toObject(), ...req.body };
+    delete merged._id;
+    delete merged.__v;
+
+    const derived = calcDerived(merged);
     const entry = await PayrollEntry.findByIdAndUpdate(
         req.params.id,
-        { ...req.body, ...derived },
+        { ...merged, ...derived },
         { new: true, runValidators: true }
     ).populate('employee', 'name designation kafalaStatus branchName');
-    if (!entry) throw new apiError(404, 'Payroll entry not found');
     return res.status(200).json(new apiResponse(200, entry, 'Payroll entry updated'));
 });
 

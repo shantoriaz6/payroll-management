@@ -70,7 +70,7 @@ const HEADER_EMPLOYEE = 6
 const HEADER_ATTENDANCE = 6
 const HEADER_EARNINGS = 7
 const HEADER_DEDUCTION = 5
-const HEADER_NET = 4
+const HEADER_NET = 5
 
 function Payroll() {
 	const { payrollRows, setPayrollRows } = useOutletContext()
@@ -179,6 +179,88 @@ function Payroll() {
 			toast.error('Delete failed')
 		}
 	}, [setPayrollRows])
+
+	const handlePaymentStatusChange = useCallback(async (id, status) => {
+		try {
+			await payrollApi.update(id, { paymentStatus: status })
+			setPayrollRows((prev) =>
+				prev.map((r) => (r._id === id ? { ...r, paymentStatus: status } : r))
+			)
+			toast.success(status === 'paid' ? 'Marked as paid' : 'Marked as unpaid')
+		} catch {
+			toast.error('Failed to update payment status')
+		}
+	}, [setPayrollRows])
+
+	const handlePrintInvoice = useCallback((row) => {
+		const name = getEmployeeName(row)
+		const designation = getDesignation(row)
+		const branch = getBranch(row)
+		const month = monthLabel
+		const year = currentYear
+
+		const printWin = window.open('', '_blank')
+		printWin.document.write(`
+			<html>
+			<head>
+				<title>Salary Invoice - ${name}</title>
+				<style>
+					body { font-family: Arial, sans-serif; padding: 40px; color: #1e293b; }
+					.invoice { max-width: 700px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; padding: 32px; }
+					h1 { font-size: 22px; margin: 0 0 4px; color: #1e293b; }
+					.sub { color: #64748b; font-size: 13px; margin-bottom: 20px; }
+					table { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 14px; }
+					th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+					th { background: #f8fafc; font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; }
+					td:last-child, th:last-child { text-align: right; }
+					.total td { font-weight: 700; border-top: 2px solid #1e293b; border-bottom: none; font-size: 15px; }
+					.meta { display: flex; justify-content: space-between; font-size: 13px; color: #64748b; margin-top: 16px; padding-top: 16px; border-top: 1px solid #e2e8f0; }
+					.footer { text-align: center; margin-top: 32px; font-size: 12px; color: #94a3b8; }
+				</style>
+			</head>
+			<body>
+				<div class="invoice">
+					<h1>Bin Mishal Global Service Co. Ltd.</h1>
+					<div class="sub">Salary Invoice — ${month} ${year}</div>
+					<table>
+						<tr><th>Employee</th><td>${name}</td></tr>
+						<tr><th>Designation</th><td>${designation}</td></tr>
+						<tr><th>Branch</th><td>${branch}</td></tr>
+					</table>
+					<table>
+						<tr><th>Earnings</th><th></th></tr>
+						<tr><td>Basic</td><td>${(row.basic ?? 0).toFixed(2)}</td></tr>
+						<tr><td>House Rent</td><td>${(row.houseRent ?? 0).toFixed(2)}</td></tr>
+						<tr><td>Food</td><td>${(row.food ?? 0).toFixed(2)}</td></tr>
+						<tr><td>Commission</td><td>${(row.commission ?? 0).toFixed(2)}</td></tr>
+						<tr><td>Overtime Pay</td><td>${(row.overTime ?? 0).toFixed(2)}</td></tr>
+						<tr class="total"><td>Gross Salary</td><td>${(row.grossSalary ?? 0).toFixed(2)}</td></tr>
+					</table>
+					<table>
+						<tr><th>Deductions</th><th></th></tr>
+						<tr><td>Loan Adjust</td><td>${(row.loanAdjust ?? 0).toFixed(2)}</td></tr>
+						<tr><td>Absent Cost</td><td>${(row.absentCost ?? 0).toFixed(2)}</td></tr>
+						<tr><td>Iqama Cost</td><td>${(row.iqamaCost ?? 0).toFixed(2)}</td></tr>
+						<tr><td>Fine</td><td>${(row.fine ?? 0).toFixed(2)}</td></tr>
+						<tr class="total"><td>Total Deduction</td><td>${(row.totalDeduction ?? 0).toFixed(2)}</td></tr>
+					</table>
+					<table>
+						<tr class="total"><td>Net Payable</td><td>${(row.netSalary ?? 0).toFixed(2)}</td></tr>
+						<tr><td>Bank Pay</td><td>${(row.bankPay ?? 0).toFixed(2)}</td></tr>
+						<tr><td>Remaining Loan</td><td>${(row.remainingLoan ?? 0).toFixed(2)}</td></tr>
+					</table>
+					<div class="meta">
+						<span>Payment Status: <strong>Paid</strong></span>
+						<span>Printed: ${new Date().toLocaleDateString('en-GB')}</span>
+					</div>
+					<div class="footer">This is a computer-generated invoice.</div>
+				</div>
+				<script>window.print();window.onafterprint=()=>window.close();<\\/script>
+			</body>
+			</html>
+		`)
+		printWin.document.close()
+	}, [monthLabel, currentYear])
 
 	const rowCount = payrollRows.length
 	const t = {
@@ -422,6 +504,9 @@ function Payroll() {
 									<th className="sticky top-[3rem] z-10 bg-indigo-50 px-4 py-3 text-center text-xs font-bold uppercase tracking-[0.2em] text-indigo-700">
 										Bank Pay
 									</th>
+									<th className="sticky top-[3rem] z-10 bg-indigo-50 px-4 py-3 text-center text-xs font-bold uppercase tracking-[0.2em] text-indigo-700">
+										Payment Status
+									</th>
 									<th className="sticky top-[3rem] z-10 bg-indigo-50 px-3 py-3 text-center text-xs font-bold uppercase tracking-[0.2em] text-indigo-500">
 										Action
 									</th>
@@ -519,6 +604,32 @@ function Payroll() {
 											<td className="border-b border-slate-100 px-4 py-3 text-right font-mono tabular-nums text-slate-800 text-sm">
 												{(row.bankPay ?? 0).toFixed(2)}
 											</td>
+											<td className="border-b border-slate-100 px-3 py-3 text-center whitespace-nowrap">
+												<select
+													value={row.paymentStatus || 'unpaid'}
+													onChange={(e) => handlePaymentStatusChange(row._id, e.target.value)}
+													className={`rounded-lg px-2 py-1 text-xs font-semibold border outline-none ${
+														row.paymentStatus === 'paid'
+															? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+															: 'bg-amber-50 text-amber-700 border-amber-200'
+													}`}
+												>
+													<option value="unpaid">Unpaid</option>
+													<option value="paid">Paid</option>
+												</select>
+												{row.paymentStatus === 'paid' && (
+													<button
+														type="button"
+														onClick={() => handlePrintInvoice(row)}
+														className="ml-1.5 rounded-md p-1.5 text-indigo-400 transition-colors hover:bg-indigo-100 hover:text-indigo-700"
+														title="Print invoice"
+													>
+														<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+															<path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+														</svg>
+													</button>
+												)}
+											</td>
 											<td className="border-b border-slate-100 px-3 py-3 text-center">
 												<div className="flex items-center justify-center gap-1">
 													<button
@@ -572,6 +683,7 @@ function Payroll() {
 									<td className="border-t-2 border-indigo-300 bg-indigo-100/50 px-4 py-4 text-right font-bold font-mono tabular-nums text-indigo-900 text-base">{t.netSalary.toFixed(2)}</td>
 									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold font-mono tabular-nums text-amber-800 text-sm">{t.remainingLoan.toFixed(2)}</td>
 									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold font-mono tabular-nums text-slate-800 text-sm">{t.bankPay.toFixed(2)}</td>
+									<td className="border-t-2 border-slate-300 px-3 py-4 text-center text-xs text-slate-400">—</td>
 									<td className="border-t-2 border-slate-300" />
 								</tr>
 							</tfoot>
@@ -727,7 +839,7 @@ function Payroll() {
 					<div className="mt-3 grid gap-x-10 gap-y-1.5 text-sm text-slate-500 sm:grid-cols-2 lg:grid-cols-4">
 						<span>Present Days = Working Days − Absent Days</span>
 						<span>Per Day Salary = Per Day Payment or Basic / {TOTAL_MONTH_DAYS}</span>
-						<span>O.T = (Per Day / 12) × OT Hours × 1.5</span>
+						<span>O.T = Manually entered by admin</span>
 						<span>Gross = Basic + H.Rent + Food + Comm. + O.T</span>
 						<span>Absent Cost = Absent Days × Per Day Salary</span>
 						<span>Total Ded. = Loan Adj. + Absent Cost + Iqama + Fine</span>

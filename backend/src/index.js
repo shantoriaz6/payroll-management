@@ -17,8 +17,14 @@ const [{ default: connectDB }, { app }] = await Promise.all([
     import("./app.js"),
 ]);
 
+const [{ default: seedAdmin }] = await Promise.all([
+    import("./seed.js"),
+]);
+
 connectDB()
-    .then(() => {
+    .then(async () => {
+        await seedAdmin();
+
         app.on("error", (error) => {
             console.log("ERROR:", error);
             throw error;

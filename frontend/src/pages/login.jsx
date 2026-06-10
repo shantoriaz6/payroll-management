@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Header from '../components/header.jsx'
+import api from '../services/axios.js'
 
 const roleAccess = {
 	admin: ['Employee management', 'Payroll settings', 'Reports', 'User approvals'],
@@ -18,6 +19,8 @@ function LoginPage({ onCreateAccount, onLogin }) {
 	const [selectedRole, setSelectedRole] = useState('employee')
 	const [formData, setFormData] = useState({ email: '', password: '' })
 	const [statusMessage, setStatusMessage] = useState('')
+	const [statusType, setStatusType] = useState('')
+	const [isLoading, setIsLoading] = useState(false)
 	const isForgotView = view === 'forgot'
 
 	function handleChange(event) {
@@ -25,24 +28,37 @@ function LoginPage({ onCreateAccount, onLogin }) {
 		setFormData((current) => ({ ...current, [name]: value }))
 	}
 
-	function handleSubmit(event) {
+	async function handleSubmit(event) {
 		event.preventDefault()
 
 		if (isForgotView) {
+			setStatusType('success')
 			setStatusMessage(
 				`Password reset email sent to ${formData.email || 'your email address'}. Open the link in your inbox to set a new password.`,
 			)
 			return
 		}
 
-		onLogin?.({
-			role: selectedRole,
-			email: formData.email,
-		})
+		try {
+			setStatusMessage('')
+			setIsLoading(true)
+			const { data } = await api.post('/admin/login', {
+				email: formData.email,
+				password: formData.password,
+			})
 
-		setStatusMessage(
-			`Logged in as ${selectedRole}. Access granted to ${roleAccess[selectedRole].join(', ')}.`,
-		)
+			onLogin?.({
+				role: 'admin',
+				email: data.data.admin.email,
+			})
+		} catch (error) {
+			const message =
+				error.response?.data?.message || 'Login failed. Please try again.'
+			setStatusType('error')
+			setStatusMessage(message)
+		} finally {
+			setIsLoading(false)
+		}
 	}
 
 	return (
@@ -168,10 +184,11 @@ function LoginPage({ onCreateAccount, onLogin }) {
 									</div>
 
 									<button
-										className="mt-1 inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-amber-700 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(15,23,42,0.24)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.28)]"
+										className="mt-1 inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-amber-700 px-5 py-3.5 text-sm font-semibold text-white shadow-[0_18px_40px_rgba(15,23,42,0.24)] transition hover:-translate-y-0.5 hover:shadow-[0_22px_48px_rgba(15,23,42,0.28)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
 										type="submit"
+										disabled={isLoading}
 									>
-										Login
+										{isLoading ? 'Signing in...' : 'Login'}
 									</button>
 								</>
 							)}
@@ -216,7 +233,11 @@ function LoginPage({ onCreateAccount, onLogin }) {
 						</div>
 
 						{statusMessage ? (
-							<p className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800">
+							<p className={`mt-4 rounded-2xl border px-4 py-3 text-sm font-medium ${
+								statusType === 'error'
+									? 'border-red-200 bg-red-50 text-red-800'
+									: 'border-emerald-200 bg-emerald-50 text-emerald-800'
+							}`}>
 								{statusMessage}
 							</p>
 						) : null}

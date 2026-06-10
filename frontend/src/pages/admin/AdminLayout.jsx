@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import Header from '../../components/header.jsx'
 import {
-	branches as initialBranches,
-	employees as initialEmployees,
-	payrollRows as initialPayrollRows
+	branches as fallbackBranches,
+	employees as fallbackEmployees,
+	payrollRows as fallbackPayroll,
 } from './adminData.js'
+import { employeeApi, payrollApi, branchApi } from '../../services/payrollApi.js'
 
 const navItems = [
 	{ to: '/admin/overview', label: 'Overview' },
@@ -23,38 +24,25 @@ function AdminLayout({ role, onLogout }) {
 	const isEmpMgmtRoute = location.pathname.includes('/admin/employee-management')
 	const [empMenuOpen, setEmpMenuOpen] = useState(isEmpMgmtRoute)
 
-	const [employees, setEmployees] = useState(() => {
-		const saved = localStorage.getItem('payroll_employees')
-		return saved ? JSON.parse(saved) : initialEmployees
-	})
-
-	const [branches, setBranches] = useState(() => {
-		const saved = localStorage.getItem('payroll_branches')
-		return saved ? JSON.parse(saved) : initialBranches
-	})
-
-	const [payrollRows, setPayrollRows] = useState(() => {
-		const saved = localStorage.getItem('payroll_payrollRows')
-		return saved ? JSON.parse(saved) : initialPayrollRows
-	})
+	const [employees, setEmployees] = useState(fallbackEmployees)
+	const [branches, setBranches] = useState(fallbackBranches)
+	const [payrollRows, setPayrollRows] = useState(fallbackPayroll)
 
 	useEffect(() => {
-		localStorage.setItem('payroll_employees', JSON.stringify(employees))
-	}, [employees])
+		employeeApi.getAll()
+			.then((res) => { if (res.data?.data) setEmployees(res.data.data) })
+			.catch(() => {})
+		branchApi.getAll()
+			.then((res) => { if (res.data?.data) setBranches(res.data.data) })
+			.catch(() => {})
+		const now = new Date()
+		payrollApi.getAll(now.getMonth() + 1, now.getFullYear())
+			.then((res) => { if (res.data?.data) setPayrollRows(res.data.data) })
+			.catch(() => {})
+	}, [])
 
 	useEffect(() => {
-		localStorage.setItem('payroll_branches', JSON.stringify(branches))
-	}, [branches])
-
-	useEffect(() => {
-		localStorage.setItem('payroll_payrollRows', JSON.stringify(payrollRows))
-	}, [payrollRows])
-
-	// Auto expand sidebar option when user is on employee-management subpaths
-	useEffect(() => {
-		if (isEmpMgmtRoute) {
-			setEmpMenuOpen(true)
-		}
+		if (isEmpMgmtRoute) setEmpMenuOpen(true)
 	}, [isEmpMgmtRoute])
 
 	return (
@@ -75,8 +63,6 @@ function AdminLayout({ role, onLogout }) {
 							<p className="mt-2 text-sm leading-6 text-slate-300">Signed in as {role}. Manage branches, employees, payroll, and access controls.</p>
 						</div>
 
-
-
 						<nav className="mt-5 grid gap-2">
 							{navItems.map((item) => (
 								<NavLink
@@ -90,7 +76,6 @@ function AdminLayout({ role, onLogout }) {
 								</NavLink>
 							))}
 
-							{/* Employee Management collapsible section */}
 							<div className="flex flex-col gap-1">
 								<button
 									type="button"

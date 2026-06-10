@@ -16,11 +16,15 @@ import DeleteEmployee from './pages/admin/DeleteEmployee.jsx'
 import { Toaster } from 'react-hot-toast'
 
 function App() {
-  const [session, setSession] = useState(null)
+  const [session, setSession] = useState(() => {
+    const saved = localStorage.getItem('session')
+    return saved ? JSON.parse(saved) : null
+  })
   const navigate = useNavigate()
 
   function handleLogin(userSession) {
     setSession(userSession)
+    localStorage.setItem('session', JSON.stringify(userSession))
 
     if (userSession.role === 'admin') {
       navigate('/admin/overview', { replace: true })
@@ -32,6 +36,7 @@ function App() {
 
   function handleLogout() {
     setSession(null)
+    localStorage.removeItem('session')
     navigate('/login', { replace: true })
   }
 

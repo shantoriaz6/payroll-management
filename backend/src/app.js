@@ -1,6 +1,10 @@
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
+import adminRouter from './routes/admin.routes.js';
+import employeeRouter from './routes/employee.routes.js';
+import payrollRouter from './routes/payroll.routes.js';
+import branchRouter from './routes/branch.routes.js';
 
 const app = express();
 
@@ -40,7 +44,24 @@ app.get("/", (req, res) => {
   res.json({ status: "API running 🚀" });
 });
 
-// routes
+app.use('/api/v1/admin', adminRouter);
+app.use('/api/v1/employees', employeeRouter);
+app.use('/api/v1/payroll', payrollRouter);
+app.use('/api/v1/branches', branchRouter);
 
+app.use((err, req, res, next) => {
+    const statusCode = err.statusCode || 500;
+    const message = err.message || 'Internal server error';
+
+    console.error(`[ERROR] ${statusCode} - ${message}`, err.stack || '');
+
+    res.status(statusCode).json({
+        success: false,
+        statusCode,
+        message,
+        errors: err.errors || [],
+        data: err.data || null,
+    });
+});
 
 export { app };

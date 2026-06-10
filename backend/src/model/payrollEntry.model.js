@@ -52,6 +52,10 @@ const payrollEntrySchema = new Schema(
             type: Number,
             default: 0,
         },
+        perDayPayment: {
+            type: Number,
+            default: 0,
+        },
         loanAdjust: {
             type: Number,
             default: 0,

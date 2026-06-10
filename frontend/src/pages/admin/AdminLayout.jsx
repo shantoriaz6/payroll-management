@@ -52,10 +52,10 @@ function AdminLayout({ role, onLogout }) {
 				<div className="absolute right-[-5rem] top-28 h-80 w-80 rounded-full bg-sky-300/18 blur-3xl" />
 				<div className="absolute bottom-[-7rem] left-1/2 h-96 w-96 -translate-x-1/2 rounded-full bg-indigo-300/14 blur-3xl" />
 			</div>
-			<div className="relative mx-auto flex w-full max-w-[1600px] flex-col gap-6">
+			<div className="relative mx-auto flex w-full max-w-[1920px] flex-col gap-6">
 				<Header />
 
-				<div className="grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
+				<div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
 					<aside className="rounded-[2rem] border border-white/70 bg-white/75 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl flex flex-col">
 						<div className="rounded-[1.5rem] border border-slate-200 bg-slate-950 px-4 py-5 text-white shadow-[0_18px_40px_rgba(15,23,42,0.16)]">
 							<p className="text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-amber-200/90">Dashboard</p>

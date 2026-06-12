@@ -4,12 +4,15 @@ import { apiResponse } from '../utils/apiResponse.js';
 import { PayrollEntry } from '../model/payrollEntry.model.js';
 import { Employee } from '../model/employee.model.js';
 
-const TOTAL_MONTH_DAYS = 31;
+function getMonthDays(month, year) {
+    return new Date(year, month, 0).getDate();
+}
 
 function calcDerived(fields) {
+    const monthDays = getMonthDays(fields.month || (new Date().getMonth() + 1), fields.year || new Date().getFullYear());
     const presentDays = fields.workingDays - fields.absentDays;
     const perDayRate = (fields.perDayPayment || 0) > 0 ? fields.perDayPayment : 0;
-    const perDaysSalary = perDayRate > 0 ? perDayRate : (TOTAL_MONTH_DAYS > 0 ? +((fields.basic || 0) / TOTAL_MONTH_DAYS).toFixed(2) : 0);
+    const perDaysSalary = perDayRate > 0 ? perDayRate : (monthDays > 0 ? +((fields.basic || 0) / monthDays).toFixed(2) : 0);
     const overTime = fields.overTime || 0;
     const grossSalary = +((fields.basic || 0) + (fields.houseRent || 0) + (fields.food || 0) + (fields.commission || 0) + overTime).toFixed(2);
     const absentCost = +((fields.absentDays || 0) * perDaysSalary).toFixed(2);
@@ -92,7 +95,7 @@ const generatePayroll = asyncHandler(async (req, res) => {
             employee: emp._id,
             month,
             year,
-            workingDays: TOTAL_MONTH_DAYS,
+            workingDays: getMonthDays(month, year),
             absentDays: 0,
             otHours: 0,
             advanceLoan: 0,

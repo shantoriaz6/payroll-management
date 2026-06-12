@@ -3,7 +3,9 @@ import { useOutletContext } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { payrollApi, employeeApi } from '../../services/payrollApi.js'
 
-const TOTAL_MONTH_DAYS = 31
+function getMonthDays(month, year) {
+	return new Date(year, month, 0).getDate()
+}
 
 function recalcRow(fields) {
 	const wd = fields.workingDays ?? 0
@@ -17,10 +19,11 @@ function recalcRow(fields) {
 	const fn = fields.fine ?? 0
 	const bp = fields.bankPay ?? 0
 	const al = fields.advanceLoan ?? 0
+	const monthDays = getMonthDays(fields.month ?? (new Date().getMonth() + 1), fields.year ?? new Date().getFullYear())
 
 	const presentDays = wd - ad
 	const perDayRate = (fields.perDayPayment ?? 0) > 0 ? fields.perDayPayment : 0
-	const perDaysSalary = perDayRate > 0 ? perDayRate : (TOTAL_MONTH_DAYS > 0 ? +(basic / TOTAL_MONTH_DAYS).toFixed(2) : 0)
+	const perDaysSalary = perDayRate > 0 ? perDayRate : (monthDays > 0 ? +(basic / monthDays).toFixed(2) : 0)
 	const overTime = fields.overTime ?? 0
 	const grossSalary = +(basic + hr + fd + comm + overTime).toFixed(2)
 	const absentCost = +(ad * perDaysSalary).toFixed(2)
@@ -168,7 +171,7 @@ function Payroll() {
 			const entryData = {
 				employee: employee._id,
 				month: currentMonth, year: currentYear,
-				workingDays: TOTAL_MONTH_DAYS, absentDays: 0, otHours: 0, advanceLoan: 0,
+				workingDays: getMonthDays(currentMonth, currentYear), absentDays: 0, otHours: 0, advanceLoan: 0,
 				basic: form.basic, houseRent: form.houseRent, food: form.food, commission: form.commission,
 				perDayPayment: form.perDayPayment,
 				loanAdjust: 0, iqamaCost: 0, fine: 0, bankPay: 0,
@@ -708,11 +711,11 @@ function Payroll() {
 										{rowCount} employees · Total
 									</td>
 
-									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold text-slate-800 text-sm">{sumRows(payrollRows, 'workingDays')}</td>
-									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold text-rose-700 text-sm">{sumRows(payrollRows, 'absentDays')}</td>
-									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold text-slate-800 text-sm">{sumRows(payrollRows, 'presentDays')}</td>
+									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold text-slate-800 text-sm">{sumRows(filteredRows, 'workingDays')}</td>
+									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold text-rose-700 text-sm">{sumRows(filteredRows, 'absentDays')}</td>
+									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold text-slate-800 text-sm">{sumRows(filteredRows, 'presentDays')}</td>
 									<td className="border-t-2 border-slate-300 px-4 py-4 text-right text-slate-400 text-sm">—</td>
-									<td className="border-t-2 border-r border-slate-300 px-4 py-4 text-right font-bold text-slate-800 text-sm">{sumRows(payrollRows, 'otHours')}</td>
+									<td className="border-t-2 border-r border-slate-300 px-4 py-4 text-right font-bold text-slate-800 text-sm">{sumRows(filteredRows, 'otHours')}</td>
 									<td className="border-t-2 border-r border-amber-200 bg-amber-50/30 px-4 py-4 text-right font-bold font-mono tabular-nums text-amber-800 text-sm">{t.advanceLoan.toFixed(2)}</td>
 
 									<td className="border-t-2 border-slate-300 px-4 py-4 text-right font-bold font-mono tabular-nums text-emerald-800 text-sm">{t.basic.toFixed(2)}</td>
@@ -886,7 +889,7 @@ function Payroll() {
 					</div>
 					<div className="mt-3 grid gap-x-10 gap-y-1.5 text-sm text-slate-500 sm:grid-cols-2 lg:grid-cols-4">
 						<span>Present Days = Working Days − Absent Days</span>
-						<span>Per Day Salary = Per Day Payment or Basic / {TOTAL_MONTH_DAYS}</span>
+						<span>Per Day Salary = Per Day Payment or Basic / Month Days</span>
 						<span>O.T = Manually entered by admin</span>
 						<span>Gross = Basic + H.Rent + Food + Comm. + O.T</span>
 						<span>Absent Cost = Absent Days × Per Day Salary</span>

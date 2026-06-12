@@ -1,10 +1,40 @@
 import { Link, useParams, useOutletContext } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { formatCurrency } from './adminData.js'
+import { employeeApi } from '../../services/payrollApi.js'
 
-	function EmployeeProfile() {
+function EmployeeProfile() {
 	const { employeeId } = useParams()
 	const { employees } = useOutletContext()
-	const employee = employees.find((item) => (item.id || item._id) === employeeId) ?? employees[0]
+	const [employee, setEmployee] = useState(
+		employees.find((item) => (item.id || item._id) === employeeId) || null
+	)
+
+	useEffect(() => {
+		const fromContext = employees.find((item) => (item.id || item._id) === employeeId)
+		if (fromContext) {
+			setEmployee(fromContext)
+			return
+		}
+		employeeApi.getById(employeeId)
+			.then((res) => { if (res.data?.data) setEmployee(res.data.data) })
+			.catch(() => {})
+	}, [employeeId, employees])
+
+	if (!employee) {
+		return (
+			<section className="rounded-[2rem] border border-white/80 bg-white/82 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl">
+				<div className="flex flex-col items-center justify-center py-20">
+					<p className="text-sm font-semibold uppercase tracking-[0.34em] text-slate-400">Employee profile</p>
+					<p className="mt-4 text-2xl font-semibold text-slate-600">Employee not found</p>
+					<Link to="/admin/employees" className="mt-6 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-amber-50">
+						Back to employees
+					</Link>
+				</div>
+			</section>
+		)
+	}
+
 	const netSalary = employee.netSalary ?? employee.salary ?? 0
 
 	const detailCards = [

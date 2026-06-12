@@ -3,30 +3,49 @@ import { apiError } from '../utils/apiError.js';
 import { apiResponse } from '../utils/apiResponse.js';
 import { Employee } from '../model/employee.model.js';
 import { uploadOnCloudinary } from '../utils/cloudinary.js';
+import fs from 'fs';
+import path from 'path';
+
+const UPLOADS_DIR = path.resolve('public/uploads');
+
+function saveLocalCopy(filePath, originalname) {
+    const filename = `${Date.now()}-${originalname}`;
+    const dest = path.join(UPLOADS_DIR, filename);
+    fs.cpSync(filePath, dest);
+    return `/uploads/${filename}`;
+}
 
 const createEmployee = asyncHandler(async (req, res) => {
     const body = { ...req.body };
 
-    // Upload profile photo
+    if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+
     if (req.files?.photo?.[0]) {
+        const localUrl = saveLocalCopy(req.files.photo[0].path, req.files.photo[0].originalname);
         const result = await uploadOnCloudinary(req.files.photo[0].path);
-        if (result) body.photoUrl = result.url;
+        body.photoUrl = result ? result.secure_url : localUrl;
     }
 
-    // Upload legal documents
     if (req.files?.legalDocFile?.length) {
         const titles = Array.isArray(req.body.legalDocTitle)
             ? req.body.legalDocTitle
             : [req.body.legalDocTitle];
         const docs = [];
         for (let i = 0; i < req.files.legalDocFile.length; i++) {
+            const localUrl = saveLocalCopy(req.files.legalDocFile[i].path, req.files.legalDocFile[i].originalname);
             const result = await uploadOnCloudinary(req.files.legalDocFile[i].path);
             if (result) {
                 docs.push({
                     title: titles[i] || '',
                     fileName: req.files.legalDocFile[i].originalname,
-                    url: result.url,
+                    url: result.secure_url,
                     publicId: result.public_id,
+                });
+            } else {
+                docs.push({
+                    title: titles[i] || '',
+                    fileName: req.files.legalDocFile[i].originalname,
+                    url: localUrl,
                 });
             }
         }

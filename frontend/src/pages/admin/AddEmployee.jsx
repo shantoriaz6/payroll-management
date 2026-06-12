@@ -71,7 +71,7 @@ function AddEmployee() {
 			...prev,
 			[field]: file,
 		}))
-		toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} document uploaded.`)
+		toast.success('Photo uploaded.')
 	}
 
 	const handleLegalDocUpload = (e) => {
@@ -212,7 +212,7 @@ function AddEmployee() {
 								</svg>
 								<span className="text-sm font-semibold text-slate-700">Click to upload photo</span>
 								<span className="text-xs text-slate-400 mt-1">PNG, JPG or SVG (Max 1MB)</span>
-								<input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'photo')} />
+								<input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'photoFile')} />
 							</label>
 							{docs.photoFile && (
 								<p className="text-xs font-semibold text-slate-600 mt-2 flex items-center gap-1">

@@ -24,7 +24,12 @@ function calcDerived(fields) {
 
 const createPayrollEntry = asyncHandler(async (req, res) => {
     const derived = calcDerived(req.body);
-    const entry = await PayrollEntry.create({ ...req.body, ...derived });
+    const { employee, month, year } = req.body;
+    const entry = await PayrollEntry.findOneAndUpdate(
+        { employee, month, year },
+        { ...req.body, ...derived },
+        { upsert: true, returnDocument: 'after', runValidators: true },
+    );
     const populated = await entry.populate('employee', 'name designation kafalaStatus branchName joiningDate');
     return res.status(201).json(new apiResponse(201, populated, 'Payroll entry created'));
 });

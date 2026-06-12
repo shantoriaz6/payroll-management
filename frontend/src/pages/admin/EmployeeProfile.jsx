@@ -11,6 +11,12 @@ function EmployeeProfile() {
 		employees.find((item) => (item.id || item._id) === employeeId) || null
 	)
 	const [newPromo, setNewPromo] = useState({ year: '', title: '', salary: '' })
+	const [investment, setInvestment] = useState('')
+	const [savingInvestment, setSavingInvestment] = useState(false)
+
+	useEffect(() => {
+		if (employee) setInvestment(employee.companyInvestment ?? 0)
+	}, [employee])
 
 	useEffect(() => {
 		const fromContext = employees.find((item) => (item.id || item._id) === employeeId)
@@ -20,7 +26,7 @@ function EmployeeProfile() {
 		}
 		employeeApi.getById(employeeId)
 			.then((res) => { if (res.data?.data) setEmployee(res.data.data) })
-			.catch(() => {})
+			.catch(() => { })
 	}, [employeeId, employees])
 
 	if (!employee) {
@@ -36,8 +42,6 @@ function EmployeeProfile() {
 			</section>
 		)
 	}
-
-	const netSalary = employee.netSalary ?? employee.salary ?? 0
 
 	const detailCards = [
 		{ label: 'Employee ID', value: employee.id || employee._id },
@@ -118,25 +122,48 @@ function EmployeeProfile() {
 
 			<div className="mt-6 grid gap-4 lg:grid-cols-[0.85fr_1.15fr]">
 				<div className="rounded-[1.75rem] border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-5 shadow-sm">
-					<p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Net salary</p>
+
 					<div className="mt-4 rounded-[1.5rem] border border-emerald-200 bg-emerald-50 p-5">
-						<p className="text-sm text-emerald-800">Current monthly net salary</p>
-						<p className="mt-3 text-4xl font-semibold tracking-tight text-emerald-950">{formatCurrency(netSalary)}</p>
-						<p className="mt-2 text-sm leading-6 text-emerald-900/80">This is the current amount paid to the employee after adjustments already stored in the profile data.</p>
+						<p className="text-sm text-emerald-800">Basic salary</p>
+						<p className="mt-3 text-4xl font-semibold tracking-tight text-emerald-950">{formatCurrency(employee.basic ?? 0)}</p>
+
 					</div>
 
 					<div className="mt-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
 						<p className="text-sm font-semibold text-slate-900">Company Investment</p>
-						<p className="mt-2 text-2xl font-semibold text-slate-950">{formatCurrency(employee.companyInvestment ?? 0)}</p>
-						<p className="mt-2 text-sm leading-6 text-slate-600">The amount the company has invested for this employee.</p>
+						<div className="mt-2 flex items-center gap-3">
+							<span className="text-lg font-semibold text-slate-400">৳</span>
+							<input
+								type="number"
+								value={investment}
+								onChange={(e) => setInvestment(Number(e.target.value))}
+								className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-2xl font-semibold text-slate-950 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
+							/>
+						</div>
+						<div className="mt-3 flex items-center justify-between">
+							<p className="text-sm leading-6 text-slate-600">The amount the company has invested for this employee.</p>
+							<button
+								onClick={async () => {
+									if (savingInvestment) return
+									setSavingInvestment(true)
+									try {
+										const res = await employeeApi.update(employee._id, { companyInvestment: investment })
+										if (res.data?.data) setEmployee(res.data.data)
+										toast.success('Investment updated')
+									} catch {
+										toast.error('Failed to save')
+									} finally {
+										setSavingInvestment(false)
+									}
+								}}
+								disabled={savingInvestment}
+								className="shrink-0 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:opacity-50"
+							>
+								{savingInvestment ? 'Saving...' : 'Save'}
+							</button>
+						</div>
 					</div>
 
-					<div className="mt-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
-						<p className="text-sm font-semibold text-slate-900">Employee snapshot</p>
-						<p className="mt-2 text-sm leading-7 text-slate-600">
-							{employee.name} works as a {employee.role || employee.designation || '—'} in {employee.branchName || employee.branch || '—'} under {(employee.kafalaStatus || employee.workerType || '—').toLowerCase()}.
-						</p>
-					</div>
 				</div>
 
 				<div className="rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">

@@ -75,6 +75,10 @@ const employeeSchema = new Schema(
                 publicId: { type: String },
             },
         ],
+        companyInvestment: {
+            type: Number,
+            default: 0,
+        },
         promotionHistory: [
             {
                 year: { type: Number },

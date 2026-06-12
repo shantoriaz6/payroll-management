@@ -25,7 +25,13 @@ router.route('/')
 
 router.route('/:id')
     .get(getEmployeeById)
-    .put(updateEmployee)
+    .put(
+        upload.fields([
+            { name: 'photo', maxCount: 1 },
+            { name: 'legalDocFile', maxCount: 10 },
+        ]),
+        updateEmployee,
+    )
     .delete(deleteEmployee);
 
 export default router;

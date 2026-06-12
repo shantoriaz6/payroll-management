@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react'
-import { Link, useOutletContext } from 'react-router-dom'
+import { useState, useCallback, useMemo } from 'react'
+import { useOutletContext } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { payrollApi, employeeApi } from '../../services/payrollApi.js'
 
@@ -83,6 +83,35 @@ function Payroll() {
 		basic: 0, houseRent: 0, food: 0, commission: 0, perDayPayment: 0,
 	})
 
+	const [branchFilter, setBranchFilter] = useState('')
+	const [designationFilter, setDesignationFilter] = useState('')
+
+	const branches = useMemo(() => {
+		const set = new Set()
+		payrollRows.forEach((r) => {
+			const b = getBranch(r)
+			if (b) set.add(b)
+		})
+		return [...set].sort()
+	}, [payrollRows])
+
+	const designations = useMemo(() => {
+		const set = new Set()
+		payrollRows.forEach((r) => {
+			const d = getDesignation(r)
+			if (d) set.add(d)
+		})
+		return [...set].sort()
+	}, [payrollRows])
+
+	const filteredRows = useMemo(() => {
+		return payrollRows.filter((r) => {
+			if (branchFilter && getBranch(r) !== branchFilter) return false
+			if (designationFilter && getDesignation(r) !== designationFilter) return false
+			return true
+		})
+	}, [payrollRows, branchFilter, designationFilter])
+
 	const now = new Date()
 	const currentMonth = now.getMonth() + 1
 	const currentYear = now.getFullYear()
@@ -119,18 +148,6 @@ function Payroll() {
 		setEditingRow(null)
 		setEditForm(null)
 	}, [])
-
-	const handleGeneratePayroll = useCallback(async () => {
-		try {
-			const res = await payrollApi.generate(currentMonth, currentYear)
-			if (res.data?.data) {
-				setPayrollRows(res.data.data)
-				toast.success('Payroll generated from active employees')
-			}
-		} catch {
-			toast.error('Could not generate payroll. Is the server running?')
-		}
-	}, [currentMonth, currentYear, setPayrollRows])
 
 	const handleAddToPayroll = useCallback(async () => {
 		if (!form.name.trim()) {
@@ -192,15 +209,13 @@ function Payroll() {
 		}
 	}, [setPayrollRows])
 
-	const handlePrintInvoice = useCallback((row) => {
+	const buildInvoiceHtml = useCallback((row, forPrint) => {
 		const name = getEmployeeName(row)
 		const designation = getDesignation(row)
 		const branch = getBranch(row)
 		const month = monthLabel
 		const year = currentYear
-
-		const printWin = window.open('', '_blank')
-		printWin.document.write(`
+		return `
 			<html>
 			<head>
 				<title>Salary Invoice - ${name}</title>
@@ -251,34 +266,50 @@ function Payroll() {
 					</table>
 					<div class="meta">
 						<span>Payment Status: <strong>${row.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</strong></span>
-						<span>Printed: ${new Date().toLocaleDateString('en-GB')}</span>
+						<span>${forPrint ? 'Printed' : 'Downloaded'}: ${new Date().toLocaleDateString('en-GB')}</span>
 					</div>
 					<div class="footer">This is a computer-generated invoice.</div>
 				</div>
-				<script>window.print();window.onafterprint=()=>window.close();<\\/script>
+				${forPrint ? '<script>window.print();window.onafterprint=()=>window.close();<\\/script>' : ''}
 			</body>
 			</html>
-		`)
-		printWin.document.close()
+		`
 	}, [monthLabel, currentYear])
 
-	const rowCount = payrollRows.length
+	const handlePrintInvoice = useCallback((row) => {
+		const printWin = window.open('', '_blank')
+		printWin.document.write(buildInvoiceHtml(row, true))
+		printWin.document.close()
+	}, [buildInvoiceHtml])
+
+	const handleDownloadInvoice = useCallback((row) => {
+		const name = getEmployeeName(row)
+		const blob = new Blob([buildInvoiceHtml(row, false)], { type: 'text/html' })
+		const url = URL.createObjectURL(blob)
+		const a = document.createElement('a')
+		a.href = url
+		a.download = `Salary_Invoice_${name.replace(/\s+/g, '_')}_${monthLabel}_${currentYear}.html`
+		a.click()
+		URL.revokeObjectURL(url)
+	}, [buildInvoiceHtml, monthLabel, currentYear])
+
+	const rowCount = filteredRows.length
 	const t = {
-		advanceLoan: sumRows(payrollRows, 'advanceLoan'),
-		basic: sumRows(payrollRows, 'basic'),
-		houseRent: sumRows(payrollRows, 'houseRent'),
-		food: sumRows(payrollRows, 'food'),
-		commission: sumRows(payrollRows, 'commission'),
-		overTime: sumRows(payrollRows, 'overTime'),
-		grossSalary: sumRows(payrollRows, 'grossSalary'),
-		loanAdjust: sumRows(payrollRows, 'loanAdjust'),
-		absentCost: sumRows(payrollRows, 'absentCost'),
-		iqamaCost: sumRows(payrollRows, 'iqamaCost'),
-		fine: sumRows(payrollRows, 'fine'),
-		totalDeduction: sumRows(payrollRows, 'totalDeduction'),
-		netSalary: sumRows(payrollRows, 'netSalary'),
-		remainingLoan: sumRows(payrollRows, 'remainingLoan'),
-		bankPay: sumRows(payrollRows, 'bankPay'),
+		advanceLoan: sumRows(filteredRows, 'advanceLoan'),
+		basic: sumRows(filteredRows, 'basic'),
+		houseRent: sumRows(filteredRows, 'houseRent'),
+		food: sumRows(filteredRows, 'food'),
+		commission: sumRows(filteredRows, 'commission'),
+		overTime: sumRows(filteredRows, 'overTime'),
+		grossSalary: sumRows(filteredRows, 'grossSalary'),
+		loanAdjust: sumRows(filteredRows, 'loanAdjust'),
+		absentCost: sumRows(filteredRows, 'absentCost'),
+		iqamaCost: sumRows(filteredRows, 'iqamaCost'),
+		fine: sumRows(filteredRows, 'fine'),
+		totalDeduction: sumRows(filteredRows, 'totalDeduction'),
+		netSalary: sumRows(filteredRows, 'netSalary'),
+		remainingLoan: sumRows(filteredRows, 'remainingLoan'),
+		bankPay: sumRows(filteredRows, 'bankPay'),
 	}
 
 	return (
@@ -309,21 +340,26 @@ function Payroll() {
 							<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
 							{adding ? 'Cancel' : 'Add Employee'}
 						</button>
-						<button
-							type="button"
-							onClick={handleGeneratePayroll}
-							className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition-all hover:bg-slate-50 hover:shadow-md"
+						<select
+							value={branchFilter}
+							onChange={(e) => setBranchFilter(e.target.value)}
+							className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-all hover:border-amber-300 focus:border-amber-400"
 						>
-							<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182" /></svg>
-							Generate
-						</button>
-						<Link
-							to="/admin/overview"
-							className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-600 shadow-sm transition-all hover:bg-amber-50 hover:text-amber-800 hover:shadow-md"
+							<option value="">All Branches</option>
+							{branches.map((b) => (
+								<option key={b} value={b}>{b}</option>
+							))}
+						</select>
+						<select
+							value={designationFilter}
+							onChange={(e) => setDesignationFilter(e.target.value)}
+							className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-all hover:border-amber-300 focus:border-amber-400"
 						>
-							<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" /></svg>
-							Back
-						</Link>
+							<option value="">All Designations</option>
+							{designations.map((d) => (
+								<option key={d} value={d}>{d}</option>
+							))}
+						</select>
 					</div>
 				</div>
 
@@ -513,7 +549,7 @@ function Payroll() {
 								</tr>
 							</thead>
 							<tbody>
-								{payrollRows.map((row, idx) => {
+								{filteredRows.map((row, idx) => {
 									const isEven = idx % 2 === 0
 									return (
 										<tr
@@ -618,16 +654,28 @@ function Payroll() {
 													<option value="paid">Paid</option>
 												</select>
 												{row.paymentStatus === 'paid' && (
-													<button
-														type="button"
-														onClick={() => handlePrintInvoice(row)}
-														className="ml-1.5 rounded-md p-1.5 text-indigo-400 transition-colors hover:bg-indigo-100 hover:text-indigo-700"
-														title="Print invoice"
-													>
-														<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-															<path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
-														</svg>
-													</button>
+													<>
+														<button
+															type="button"
+															onClick={() => handlePrintInvoice(row)}
+															className="ml-1.5 rounded-md p-1.5 text-indigo-400 transition-colors hover:bg-indigo-100 hover:text-indigo-700"
+															title="Print invoice"
+														>
+															<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+																<path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.041 48.041 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" />
+															</svg>
+														</button>
+														<button
+															type="button"
+															onClick={() => handleDownloadInvoice(row)}
+															className="ml-1 rounded-md p-1.5 text-emerald-400 transition-colors hover:bg-emerald-100 hover:text-emerald-700"
+															title="Download invoice"
+														>
+															<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+																<path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+															</svg>
+														</button>
+													</>
 												)}
 											</td>
 											<td className="border-b border-slate-100 px-3 py-3 text-center">

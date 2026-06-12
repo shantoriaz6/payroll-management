@@ -23,7 +23,7 @@ function Employees() {
 								<h3 className="text-lg font-semibold text-slate-950">{employee.name}</h3>
 								<p className="mt-1 text-sm text-slate-600">{employee.role} • {employee.branch}</p>
 							</div>
-							<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 transition group-hover:bg-amber-200">{employee.status}</span>
+							<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 transition group-hover:bg-amber-200">{employee.branchName || employee.branch || '—'}</span>
 						</div>
 						<p className="mt-3 text-sm font-semibold text-slate-900">{employee.id}</p>
 					</Link>

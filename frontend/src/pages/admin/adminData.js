@@ -194,6 +194,6 @@ export const payrollRows = [
 ]
 
 export function formatCurrency(amount) {
-	if (amount == null || isNaN(amount)) return '৳0'
-	return `৳${Number(amount).toLocaleString('en-BD')}`
+	if (amount == null || isNaN(amount)) return 'SAR 0'
+	return `SAR ${Number(amount).toLocaleString('en-SA')}`
 }

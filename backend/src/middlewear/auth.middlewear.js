@@ -23,6 +23,6 @@ export const verifyJWT = async (req, res, next) => {
         req.admin = admin;
         next();
     } catch (error) {
-        throw new apiError(401, error?.message || 'Invalid access token');
+        next(error);
     }
 };

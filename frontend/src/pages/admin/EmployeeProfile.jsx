@@ -1,14 +1,14 @@
 import { Link, useParams, useOutletContext } from 'react-router-dom'
 import { formatCurrency } from './adminData.js'
 
-function EmployeeProfile() {
+	function EmployeeProfile() {
 	const { employeeId } = useParams()
 	const { employees } = useOutletContext()
-	const employee = employees.find((item) => item.id === employeeId) ?? employees[0]
-	const netSalary = employee.netSalary ?? employee.salary
+	const employee = employees.find((item) => (item.id || item._id) === employeeId) ?? employees[0]
+	const netSalary = employee.netSalary ?? employee.salary ?? 0
 
 	const detailCards = [
-		{ label: 'Employee ID', value: employee.id },
+		{ label: 'Employee ID', value: employee.id || employee._id },
 		{ label: 'Company', value: employee.company ?? 'Bin Mishal Travells' },
 		{ label: 'Branch', value: employee.branch },
 		{ label: 'Department', value: employee.department ?? '—' },
@@ -27,7 +27,7 @@ function EmployeeProfile() {
 					<div>
 						<p className="text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-amber-700/80">Employee profile</p>
 						<h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{employee.name}</h2>
-						<p className="mt-2 text-sm text-slate-600">{employee.role} • {employee.branch}</p>
+						<p className="mt-2 text-sm text-slate-600">{employee.role || employee.designation || '—'} • {employee.branch || employee.branchName || '—'}</p>
 						<div className="mt-4 flex flex-wrap gap-2">
 							<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white">{employee.workerType}</span>
 							<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-amber-800">{employee.department}</span>
@@ -67,7 +67,7 @@ function EmployeeProfile() {
 					<div className="mt-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
 						<p className="text-sm font-semibold text-slate-900">Employee snapshot</p>
 						<p className="mt-2 text-sm leading-7 text-slate-600">
-							{employee.name} works as a {employee.role} in {employee.branch} under {employee.workerType.toLowerCase()}.
+							{employee.name} works as a {employee.role || employee.designation || '—'} in {employee.branch || employee.branchName || '—'} under {(employee.workerType || employee.kafalaStatus || '—').toLowerCase()}.
 						</p>
 					</div>
 				</div>

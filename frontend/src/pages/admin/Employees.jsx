@@ -17,7 +17,7 @@ function Employees() {
 
 			<div className="mt-5 grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
 				{employees.map((employee) => (
-					<Link key={employee.id} to={`/admin/employees/${employee.id}`} className="group rounded-[1.5rem] border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 transition hover:-translate-y-1 hover:border-amber-200 hover:shadow-[0_18px_44px_rgba(15,23,42,0.12)]">
+					<Link key={employee.id || employee._id} to={`/admin/employees/${employee.id || employee._id}`} className="group rounded-[1.5rem] border border-slate-200 bg-gradient-to-br from-slate-50 to-white p-4 transition hover:-translate-y-1 hover:border-amber-200 hover:shadow-[0_18px_44px_rgba(15,23,42,0.12)]">
 						<div className="flex items-start justify-between gap-4">
 							<div>
 								<h3 className="text-lg font-semibold text-slate-950">{employee.name}</h3>

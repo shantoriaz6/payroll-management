@@ -52,6 +52,12 @@ const updatePayrollEntry = asyncHandler(async (req, res) => {
     const merged = { ...existing.toObject(), ...req.body };
     delete merged._id;
     delete merged.__v;
+    delete merged.createdAt;
+    delete merged.updatedAt;
+
+    if (merged.employee && typeof merged.employee === 'object') {
+        merged.employee = merged.employee._id || merged.employee;
+    }
 
     const derived = calcDerived(merged);
     const entry = await PayrollEntry.findByIdAndUpdate(

@@ -68,7 +68,7 @@ function getJoiningDate(row) {
 
 const HEADER_EMPLOYEE = 6
 const HEADER_ATTENDANCE = 6
-const HEADER_EARNINGS = 7
+const HEADER_EARNINGS = 6
 const HEADER_DEDUCTION = 5
 const HEADER_NET = 5
 
@@ -250,7 +250,7 @@ function Payroll() {
 						<tr><td>Remaining Loan</td><td>${(row.remainingLoan ?? 0).toFixed(2)}</td></tr>
 					</table>
 					<div class="meta">
-						<span>Payment Status: <strong>Paid</strong></span>
+						<span>Payment Status: <strong>${row.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</strong></span>
 						<span>Printed: ${new Date().toLocaleDateString('en-GB')}</span>
 					</div>
 					<div class="footer">This is a computer-generated invoice.</div>

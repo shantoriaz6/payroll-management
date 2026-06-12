@@ -194,5 +194,6 @@ export const payrollRows = [
 ]
 
 export function formatCurrency(amount) {
-	return `৳${amount.toLocaleString('en-BD')}`
+	if (amount == null || isNaN(amount)) return '৳0'
+	return `৳${Number(amount).toLocaleString('en-BD')}`
 }

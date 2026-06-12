@@ -22,7 +22,13 @@ import { formatCurrency } from './adminData.js'
 			<div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
 				<div className="flex flex-col gap-5 sm:flex-row sm:items-center">
 					<div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-[1.8rem] border border-slate-200 bg-slate-100 shadow-lg">
-						<img src={employee.photoUrl} alt={employee.name} className="h-full w-full object-cover" />
+						{employee.photoUrl ? (
+							<img src={employee.photoUrl} alt={employee.name} className="h-full w-full object-cover" />
+						) : (
+							<div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-amber-400 to-blue-600 text-4xl font-bold text-white">
+								{employee.name?.charAt(0)?.toUpperCase()}
+							</div>
+						)}
 					</div>
 					<div>
 						<p className="text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-amber-700/80">Employee profile</p>
@@ -93,6 +99,23 @@ import { formatCurrency } from './adminData.js'
 					</div>
 				</div>
 			</div>
+
+			{employee.legalDocuments?.length > 0 && (
+				<div className="mt-6 rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-sm">
+					<p className="text-sm font-semibold uppercase tracking-[0.24em] text-slate-500">Legal documents vault</p>
+					<div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						{employee.legalDocuments.map((doc, i) => (
+							<div key={doc._id || i} className="overflow-hidden rounded-[1.25rem] border border-slate-200 bg-slate-50">
+								<img src={doc.url || doc.dataUrl} alt={doc.title} className="h-40 w-full object-cover" />
+								<div className="p-3">
+									<p className="text-sm font-semibold text-slate-900 truncate">{doc.title}</p>
+									<p className="text-xs text-slate-500 truncate">{doc.fileName}</p>
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
 		</section>
 	)
 }

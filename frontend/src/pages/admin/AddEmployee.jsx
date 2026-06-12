@@ -1,10 +1,44 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, useOutletContext, Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
+import { employeeApi, payrollApi } from '../../services/payrollApi.js'
+
+function getMonthDays(month, year) {
+	return new Date(year, month, 0).getDate()
+}
+
+function recalcRow(fields) {
+	const wd = fields.workingDays ?? 0
+	const ad = fields.absentDays ?? 0
+	const basic = fields.basic ?? 0
+	const hr = fields.houseRent ?? 0
+	const fd = fields.food ?? 0
+	const comm = fields.commission ?? 0
+	const la = fields.loanAdjust ?? 0
+	const iq = fields.iqamaCost ?? 0
+	const fn = fields.fine ?? 0
+	const bp = fields.bankPay ?? 0
+	const al = fields.advanceLoan ?? 0
+	const monthDays = getMonthDays(fields.month ?? (new Date().getMonth() + 1), fields.year ?? new Date().getFullYear())
+	const presentDays = wd - ad
+	const perDayRate = (fields.perDayPayment ?? 0) > 0 ? fields.perDayPayment : 0
+	const perDaysSalary = perDayRate > 0 ? perDayRate : (monthDays > 0 ? +(basic / monthDays).toFixed(2) : 0)
+	const overTime = fields.overTime ?? 0
+	const grossSalary = +(basic + hr + fd + comm + overTime).toFixed(2)
+	const absentCost = +(ad * perDaysSalary).toFixed(2)
+	const totalDeduction = +(la + absentCost + iq + fn).toFixed(2)
+	const netSalary = +(grossSalary - totalDeduction - bp).toFixed(2)
+	const remainingLoan = +(al - la).toFixed(2)
+	return { presentDays, perDaysSalary, overTime, grossSalary, absentCost, totalDeduction, netSalary, remainingLoan }
+}
 
 function AddEmployee() {
 	const navigate = useNavigate()
 	const { employees, setEmployees, branches, setBranches, payrollRows, setPayrollRows } = useOutletContext()
+
+	const now = new Date()
+	const currentMonth = now.getMonth() + 1
+	const currentYear = now.getFullYear()
 
 	const [formData, setFormData] = useState({
 		name: '',
@@ -13,50 +47,31 @@ function AddEmployee() {
 		branch: 'Dhaka HQ',
 		designation: '',
 		department: '',
-		workerType: 'Under Kafala',
-		salary: '',
-		netSalary: '',
-		status: 'Active',
+		joiningDate: '',
+		kafalaStatus: 'Under Kafala',
+		basic: 0,
+		houseRent: 0,
+		food: 0,
+		commission: 0,
+		perDayPayment: 0,
 	})
 
 	const [docs, setDocs] = useState({
-		photo: null,
-		photoName: '',
+		photoUrl: null,
+		photoFile: null,
 	})
 
 	const [docTitle, setDocTitle] = useState('')
 	const [legalDocuments, setLegalDocuments] = useState([])
 
-	// Auto-compute Net Salary as 90% of Gross Salary by default, but allow custom overrides
-	useEffect(() => {
-		if (formData.salary) {
-			const calculated = Math.round(Number(formData.salary) * 0.9)
-			setFormData((prev) => ({
-				...prev,
-				netSalary: prev.netSalary && prev.netSalary !== String(Math.round(Number(prev.salary) * 0.9))
-					? prev.netSalary 
-					: String(calculated)
-			}))
-		} else {
-			setFormData((prev) => ({ ...prev, netSalary: '' }))
-		}
-	}, [formData.salary])
-
-	// File to Base64 utility for local state preservation
 	const handleFileChange = (e, field) => {
 		const file = e.target.files[0]
 		if (!file) return
-
-		const reader = new FileReader()
-		reader.onloadend = () => {
-			setDocs((prev) => ({
-				...prev,
-				[field]: reader.result,
-				[`${field}Name`]: file.name,
-			}))
-			toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} document uploaded.`)
-		}
-		reader.readAsDataURL(file)
+		setDocs((prev) => ({
+			...prev,
+			[field]: file,
+		}))
+		toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} document uploaded.`)
 	}
 
 	const handleLegalDocUpload = (e) => {
@@ -69,21 +84,16 @@ function AddEmployee() {
 			return
 		}
 
-		const reader = new FileReader()
-		reader.onloadend = () => {
-			setLegalDocuments((prev) => [
-				...prev,
-				{
-					id: `doc-${Date.now()}`,
-					title: docTitle.trim(),
-					fileName: file.name,
-					dataUrl: reader.result,
-				},
-			])
-			setDocTitle('')
-			toast.success(`"${docTitle.trim()}" added to legal documents vault.`)
-		}
-		reader.readAsDataURL(file)
+		setLegalDocuments((prev) => [
+			...prev,
+			{
+				id: `doc-${Date.now()}`,
+				title: docTitle.trim(),
+				file,
+			},
+		])
+		setDocTitle('')
+		toast.success(`"${docTitle.trim()}" added to legal documents vault.`)
 		e.target.value = ''
 	}
 
@@ -92,85 +102,79 @@ function AddEmployee() {
 		toast.success('Document removed from vault.')
 	}
 
-	const handleSubmit = (e) => {
+	const handleSubmit = async (e) => {
 		e.preventDefault()
 
-		// Validations
 		if (!formData.name.trim()) return toast.error('Name is required')
 		if (!formData.email.trim()) return toast.error('Email is required')
 		if (!formData.contactNumber.trim()) return toast.error('Contact Number is required')
 		if (!formData.designation.trim()) return toast.error('Designation is required')
-		if (!formData.department.trim()) return toast.error('Department is required')
-		if (!formData.salary || isNaN(formData.salary)) return toast.error('Valid Salary is required')
 
-		// Generate dynamic Employee ID
-		const numericIds = employees
-			.map((emp) => parseInt(emp.id.replace('e-', ''), 10))
-			.filter((num) => !isNaN(num))
-		const nextNumericId = numericIds.length > 0 ? Math.max(...numericIds) + 1 : 101
-		const newEmployeeId = `e-${nextNumericId}`
+		try {
+			const fd = new FormData()
+			fd.append('name', formData.name)
+			fd.append('email', formData.email)
+			fd.append('contactNumber', formData.contactNumber)
+			if (formData.joiningDate) fd.append('joiningDate', formData.joiningDate)
+			fd.append('designation', formData.designation)
+			fd.append('kafalaStatus', formData.kafalaStatus)
+			fd.append('branchName', formData.branch)
+			fd.append('basic', Number(formData.basic) || 0)
+			fd.append('houseRent', Number(formData.houseRent) || 0)
+			fd.append('food', Number(formData.food) || 0)
+			fd.append('commission', Number(formData.commission) || 0)
+			fd.append('perDayPayment', Number(formData.perDayPayment) || 0)
 
-		// Create default avatar SVG if none provided
-		const fallbackAvatar = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="%23f59e0b"/><stop offset="1" stop-color="%231d4ed8"/></linearGradient></defs><rect width="200" height="200" rx="100" fill="url(%23g)"/><circle cx="100" cy="78" r="38" fill="%23fff" fill-opacity="0.94"/><path d="M42 174c13-33 38-49 58-49s45 16 58 49" fill="%23fff" fill-opacity="0.94"/></svg>`
+			if (docs.photoFile) fd.append('photo', docs.photoFile)
 
-		const newEmployee = {
-			id: newEmployeeId,
-			name: formData.name,
-			email: formData.email,
-			contactNumber: formData.contactNumber,
-			company: 'Bin Mishal Travells',
-			branch: formData.branch,
-			department: formData.department,
-			role: formData.designation,
-			workerType: formData.workerType,
-			salary: Number(formData.salary),
-			netSalary: Number(formData.netSalary),
-			status: formData.status,
-			photoUrl: docs.photo || fallbackAvatar,
-			legalDocuments,
-			promotionHistory: [
-				{ year: new Date().getFullYear(), salary: Number(formData.salary), title: formData.designation }
-			]
-		}
+			legalDocuments.forEach((doc) => {
+				fd.append('legalDocTitle', doc.title)
+				fd.append('legalDocFile', doc.file)
+			})
 
-		// Update Employees State
-		setEmployees((prev) => [...prev, newEmployee])
+			const empRes = await employeeApi.create(fd)
+			const employee = empRes.data.data
 
-		// Increment Branch Count
-		setBranches((prev) =>
-			prev.map((b) =>
-				b.name === formData.branch
-					? { ...b, employees: b.employees + 1 }
-					: b
+			const entryData = {
+				employee: employee._id,
+				month: currentMonth,
+				year: currentYear,
+				workingDays: getMonthDays(currentMonth, currentYear),
+				absentDays: 0,
+				otHours: 0,
+				advanceLoan: 0,
+				basic: Number(formData.basic) || 0,
+				houseRent: Number(formData.houseRent) || 0,
+				food: Number(formData.food) || 0,
+				commission: Number(formData.commission) || 0,
+				perDayPayment: Number(formData.perDayPayment) || 0,
+				loanAdjust: 0,
+				iqamaCost: 0,
+				fine: 0,
+				bankPay: 0,
+			}
+			const calc = recalcRow(entryData)
+			const payRes = await payrollApi.create({ ...entryData, ...calc })
+
+			setEmployees((prev) => [...prev, employee])
+			setPayrollRows((prev) => [...prev, payRes.data.data])
+
+			setBranches((prev) =>
+				prev.map((b) =>
+					b.name === formData.branch
+						? { ...b, employees: b.employees + 1 }
+						: b
+				)
 			)
-		)
 
-		// Create and add default Payroll Row
-		const newPayrollRow = {
-			employeeId: newEmployeeId,
-			name: formData.name,
-			branch: formData.branch,
-			dailyFee: Math.round(Number(formData.salary) / 30),
-			presentDays: 25,
-			leaveDays: 1,
-			absentDays: 4,
-			overtimeHours: 10,
-			incentive: 0,
-			bonus: 0,
-			fine: 0,
-			fineWaived: 0,
-			loan: 0,
-			loanPaid: 0,
-			gross: Number(formData.salary),
-			deduction: Math.round(Number(formData.salary) * 0.1),
-			net: Number(formData.netSalary),
-			attendance: ['P', 'P', 'P', 'P', 'P', 'P', 'P', 'L', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'P', 'A', 'P', 'P', 'P', 'P', 'P', 'P', 'A', 'P', 'P', 'P', 'P'],
+			toast.success(`${formData.name} added to payroll`)
+			navigate('/admin/payroll')
+		} catch {
+			toast.error('Failed to save. Check server connection.')
 		}
-		setPayrollRows((prev) => [...prev, newPayrollRow])
-
-		toast.success(`Successfully onboarded ${formData.name}!`)
-		navigate('/admin/employees')
 	}
+
+	const photoPreview = docs.photoFile ? URL.createObjectURL(docs.photoFile) : null
 
 	return (
 		<section className="rounded-[2rem] border border-white/80 bg-white/82 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl">
@@ -193,8 +197,8 @@ function AddEmployee() {
 					
 					<div className="mt-5 flex flex-col items-center gap-6 sm:flex-row">
 						<div className="relative h-28 w-28 shrink-0 overflow-hidden rounded-[1.8rem] border-2 border-dashed border-slate-300 bg-slate-100 shadow-inner flex items-center justify-center">
-							{docs.photo ? (
-								<img src={docs.photo} alt="Preview" className="h-full w-full object-cover" />
+							{photoPreview ? (
+								<img src={photoPreview} alt="Preview" className="h-full w-full object-cover" />
 							) : (
 								<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-8 h-8 text-slate-400">
 									<path strokeLinecap="round" strokeLinejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -210,10 +214,10 @@ function AddEmployee() {
 								<span className="text-xs text-slate-400 mt-1">PNG, JPG or SVG (Max 1MB)</span>
 								<input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'photo')} />
 							</label>
-							{docs.photoName && (
+							{docs.photoFile && (
 								<p className="text-xs font-semibold text-slate-600 mt-2 flex items-center gap-1">
 									<span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-									{docs.photoName}
+									{docs.photoFile.name}
 								</p>
 							)}
 						</div>
@@ -261,22 +265,20 @@ function AddEmployee() {
 					</div>
 				</div>
 
-				{/* Part 3: Job Hierarchy & Salaries */}
+				{/* Part 3: Workspace & Assignment */}
 				<div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
 					<h3 className="text-base font-semibold text-slate-900">3. Workspace & Assignment</h3>
 					
 					<div className="mt-5 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
 						<label className="grid gap-2 text-sm font-semibold text-slate-700">
-							Branch Assignment *
-							<select
+							Branch *
+							<input
+								required
 								value={formData.branch}
 								onChange={(e) => setFormData({ ...formData, branch: e.target.value })}
-								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
-							>
-								{branches.map((b) => (
-									<option key={b.id} value={b.name}>{b.name}</option>
-								))}
-							</select>
+								placeholder="e.g. Dhaka HQ"
+								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
+							/>
 						</label>
 
 						<label className="grid gap-2 text-sm font-semibold text-slate-700">
@@ -301,47 +303,98 @@ function AddEmployee() {
 							/>
 						</label>
 
+					</div>
+				</div>
+
+				{/* Part 4: Salary Breakdown */}
+				<div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
+					<h3 className="text-base font-semibold text-slate-900">4. Salary Breakdown</h3>
+					
+					<div className="mt-5 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
 						<label className="grid gap-2 text-sm font-semibold text-slate-700">
-							Worker Type *
+							Joining Date
+							<input
+								type="date"
+								value={formData.joiningDate}
+								onChange={(e) => setFormData({ ...formData, joiningDate: e.target.value })}
+								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
+							/>
+						</label>
+
+						<label className="grid gap-2 text-sm font-semibold text-slate-700">
+							Kafala Status
 							<select
-								value={formData.workerType}
-								onChange={(e) => setFormData({ ...formData, workerType: e.target.value })}
+								value={formData.kafalaStatus}
+								onChange={(e) => setFormData({ ...formData, kafalaStatus: e.target.value })}
 								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
 							>
 								<option>Under Kafala</option>
 								<option>Outside Kafala</option>
+								<option>Saudi</option>
 								<option>Sariatul Binmishal</option>
 							</select>
 						</label>
 
 						<label className="grid gap-2 text-sm font-semibold text-slate-700">
-							Gross Salary (Monthly) *
+							Basic
 							<input
-								required
 								type="number"
-								value={formData.salary}
-								onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-								placeholder="e.g. 50000"
+								value={formData.basic || ''}
+								onChange={(e) => setFormData({ ...formData, basic: Number(e.target.value) })}
+								placeholder="0"
 								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
 							/>
 						</label>
 
 						<label className="grid gap-2 text-sm font-semibold text-slate-700">
-							Net Salary (Monthly)
+							House Rent
 							<input
 								type="number"
-								value={formData.netSalary}
-								onChange={(e) => setFormData({ ...formData, netSalary: e.target.value })}
-								placeholder="e.g. 45000"
+								value={formData.houseRent || ''}
+								onChange={(e) => setFormData({ ...formData, houseRent: Number(e.target.value) })}
+								placeholder="0"
+								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
+							/>
+						</label>
+
+						<label className="grid gap-2 text-sm font-semibold text-slate-700">
+							Food
+							<input
+								type="number"
+								value={formData.food || ''}
+								onChange={(e) => setFormData({ ...formData, food: Number(e.target.value) })}
+								placeholder="0"
+								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
+							/>
+						</label>
+
+						<label className="grid gap-2 text-sm font-semibold text-slate-700">
+							Commission
+							<input
+								type="number"
+								value={formData.commission || ''}
+								onChange={(e) => setFormData({ ...formData, commission: Number(e.target.value) })}
+								placeholder="0"
+								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
+							/>
+						</label>
+
+						<label className="grid gap-2 text-sm font-semibold text-slate-700">
+							Per Day Payment
+							<input
+								type="number"
+								value={formData.perDayPayment || ''}
+								onChange={(e) => setFormData({ ...formData, perDayPayment: Number(e.target.value) })}
+								placeholder="0 (auto-calc from Basic)"
 								className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 font-normal text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:bg-white focus:ring-4 focus:ring-amber-100"
 							/>
 						</label>
 					</div>
 				</div>
 
-				{/* Part 4: Legal Documents Vault */}
+				{/* Part 5: Legal Documents Vault */}
 				<div className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-sm">
-					<h3 className="text-base font-semibold text-slate-900">4. Legal Documents Vault</h3>
+					<h3 className="text-base font-semibold text-slate-900">5. Legal Documents Vault</h3>
 					<p className="mt-1 text-sm text-slate-500">Add regulatory documents with a title — passport, visa, work permit, or any other legal file. Use the same upload to add as many as needed.</p>
 
 					<div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-5">
@@ -373,11 +426,11 @@ function AddEmployee() {
 							{legalDocuments.map((doc) => (
 								<div key={doc.id} className="flex items-center gap-4 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
 									<div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
-										<img src={doc.dataUrl} alt={doc.title} className="h-full w-full object-cover" />
+										<img src={URL.createObjectURL(doc.file)} alt={doc.title} className="h-full w-full object-cover" />
 									</div>
 									<div className="min-w-0 flex-1">
 										<p className="text-sm font-semibold text-slate-900 truncate">{doc.title}</p>
-										<p className="text-xs text-slate-500 truncate">{doc.fileName}</p>
+										<p className="text-xs text-slate-500 truncate">{doc.file.name}</p>
 									</div>
 									<span className="shrink-0 text-[0.65rem] font-bold uppercase tracking-wider bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded">Uploaded</span>
 									<button

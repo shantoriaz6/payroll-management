@@ -7,6 +7,14 @@ const employeeSchema = new Schema(
             required: [true, 'Name is required'],
             trim: true,
         },
+        email: {
+            type: String,
+            trim: true,
+        },
+        contactNumber: {
+            type: String,
+            trim: true,
+        },
         joiningDate: {
             type: Date,
         },
@@ -51,6 +59,18 @@ const employeeSchema = new Schema(
             enum: ['Active', 'Inactive'],
             default: 'Active',
         },
+        photoUrl: {
+            type: String,
+            default: '',
+        },
+        legalDocuments: [
+            {
+                title: { type: String },
+                fileName: { type: String },
+                url: { type: String },
+                publicId: { type: String },
+            },
+        ],
     },
     { timestamps: true }
 );

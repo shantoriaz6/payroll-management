@@ -1,11 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import Header from '../../components/header.jsx'
-import {
-	branches as fallbackBranches,
-	employees as fallbackEmployees,
-	payrollRows as fallbackPayroll,
-} from './adminData.js'
 import { employeeApi, payrollApi, branchApi } from '../../services/payrollApi.js'
 
 const navItems = [
@@ -24,9 +19,9 @@ function AdminLayout({ role, onLogout }) {
 	const isEmpMgmtRoute = location.pathname.includes('/admin/employee-management')
 	const [empMenuOpen, setEmpMenuOpen] = useState(isEmpMgmtRoute)
 
-	const [employees, setEmployees] = useState(fallbackEmployees)
-	const [branches, setBranches] = useState(fallbackBranches)
-	const [payrollRows, setPayrollRows] = useState(fallbackPayroll)
+	const [employees, setEmployees] = useState([])
+	const [branches, setBranches] = useState([])
+	const [payrollRows, setPayrollRows] = useState([])
 
 	useEffect(() => {
 		employeeApi.getAll()

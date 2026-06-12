@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import toast from 'react-hot-toast'
-import { payrollApi, employeeApi } from '../../services/payrollApi.js'
+import { payrollApi } from '../../services/payrollApi.js'
 
 function getMonthDays(month, year) {
 	return new Date(year, month, 0).getDate()
@@ -76,18 +76,23 @@ const HEADER_DEDUCTION = 5
 const HEADER_NET = 5
 
 function Payroll() {
-	const { payrollRows, setPayrollRows } = useOutletContext()
+	const { payrollRows, setPayrollRows, employees, setEmployees } = useOutletContext()
 
-	const [adding, setAdding] = useState(false)
 	const [editingRow, setEditingRow] = useState(null)
 	const [editForm, setEditForm] = useState(null)
-	const [form, setForm] = useState({
-		name: '', joiningDate: '', designation: '', kafalaStatus: 'Under Kafala', branchName: '',
-		basic: 0, houseRent: 0, food: 0, commission: 0, perDayPayment: 0,
-	})
 
 	const [branchFilter, setBranchFilter] = useState('')
 	const [designationFilter, setDesignationFilter] = useState('')
+
+	const now = new Date()
+	const [selectMonth, setSelectMonth] = useState(now.getMonth() + 1)
+	const [selectYear, setSelectYear] = useState(now.getFullYear())
+
+	const handleFetchPayroll = useCallback(() => {
+		payrollApi.getAll(selectMonth, selectYear)
+			.then((res) => { if (res.data?.data) setPayrollRows(res.data.data) })
+			.catch(() => toast.error('Failed to load payroll data'))
+	}, [selectMonth, selectYear, setPayrollRows])
 
 	const branches = useMemo(() => {
 		const set = new Set()
@@ -115,11 +120,8 @@ function Payroll() {
 		})
 	}, [payrollRows, branchFilter, designationFilter])
 
-	const now = new Date()
-	const currentMonth = now.getMonth() + 1
-	const currentYear = now.getFullYear()
-	const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(now)
-	const yearShort = String(currentYear).slice(2)
+	const monthLabel = new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(selectYear, selectMonth - 1))
+	const yearShort = String(selectYear).slice(2)
 
 	const handleEditOpen = useCallback((row) => {
 		setEditForm({ ...row })
@@ -152,53 +154,24 @@ function Payroll() {
 		setEditForm(null)
 	}, [])
 
-	const handleAddToPayroll = useCallback(async () => {
-		if (!form.name.trim()) {
-			toast.error('Employee name is required')
-			return
-		}
-		try {
-			const empRes = await employeeApi.create({
-				name: form.name,
-				joiningDate: form.joiningDate || undefined,
-				designation: form.designation,
-				kafalaStatus: form.kafalaStatus,
-				branchName: form.branchName,
-				basic: form.basic, houseRent: form.houseRent, food: form.food, commission: form.commission,
-				perDayPayment: form.perDayPayment,
-			})
-			const employee = empRes.data.data
-			const entryData = {
-				employee: employee._id,
-				month: currentMonth, year: currentYear,
-				workingDays: getMonthDays(currentMonth, currentYear), absentDays: 0, otHours: 0, advanceLoan: 0,
-				basic: form.basic, houseRent: form.houseRent, food: form.food, commission: form.commission,
-				perDayPayment: form.perDayPayment,
-				loanAdjust: 0, iqamaCost: 0, fine: 0, bankPay: 0,
-			}
-			const calc = recalcRow(entryData)
-			const payRes = await payrollApi.create({ ...entryData, ...calc })
-			const newEntry = payRes.data.data
-			setPayrollRows((prev) => [...prev, newEntry])
-			setForm({ name: '', joiningDate: '', designation: '', kafalaStatus: 'Under Kafala', branchName: '', basic: 0, houseRent: 0, food: 0, commission: 0, perDayPayment: 0 })
-			setAdding(false)
-			toast.success(`${form.name} added to payroll`)
-		} catch {
-			toast.error('Failed to add employee. Check server connection.')
-		}
-	}, [form, currentMonth, currentYear, setPayrollRows])
+
 
 	const handleDeleteEntry = useCallback(async (row) => {
 		const id = row._id
+		const employeeId = row.employee?._id || row.employeeId
 		if (!id) return
 		try {
 			await payrollApi.delete(id)
+			if (employeeId) {
+				await employeeApi.delete(employeeId)
+				setEmployees((prev) => prev.filter((e) => (e._id || e.id) !== employeeId))
+			}
 			setPayrollRows((prev) => prev.filter((r) => r._id !== id))
-			toast.success('Entry removed')
+			toast.success('Entry and employee removed')
 		} catch {
 			toast.error('Delete failed')
 		}
-	}, [setPayrollRows])
+	}, [setPayrollRows, setEmployees])
 
 	const handlePaymentStatusChange = useCallback(async (id, status) => {
 		try {
@@ -217,7 +190,7 @@ function Payroll() {
 		const designation = getDesignation(row)
 		const branch = getBranch(row)
 		const month = monthLabel
-		const year = currentYear
+		const year = selectYear
 		return `
 			<html>
 			<head>
@@ -277,7 +250,7 @@ function Payroll() {
 			</body>
 			</html>
 		`
-	}, [monthLabel, currentYear])
+	}, [monthLabel, selectYear])
 
 	const handlePrintInvoice = useCallback((row) => {
 		const printWin = window.open('', '_blank')
@@ -291,10 +264,10 @@ function Payroll() {
 		const url = URL.createObjectURL(blob)
 		const a = document.createElement('a')
 		a.href = url
-		a.download = `Salary_Invoice_${name.replace(/\s+/g, '_')}_${monthLabel}_${currentYear}.html`
+		a.download = `Salary_Invoice_${name.replace(/\s+/g, '_')}_${monthLabel}_${selectYear}.html`
 		a.click()
 		URL.revokeObjectURL(url)
-	}, [buildInvoiceHtml, monthLabel, currentYear])
+	}, [buildInvoiceHtml, monthLabel, selectYear])
 
 	const rowCount = filteredRows.length
 	const t = {
@@ -321,7 +294,7 @@ function Payroll() {
 				<div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
 					<div className="space-y-2">
 						<span className="inline-block rounded-full bg-amber-100 px-4 py-1 text-xs font-bold uppercase tracking-[0.28em] text-amber-800">
-							Payroll · {monthLabel} {currentYear}
+							Payroll · {monthLabel} {selectYear}
 						</span>
 						<h2 className="text-3xl font-bold tracking-tight text-slate-900">
 							Salary Sheet
@@ -331,17 +304,29 @@ function Payroll() {
 						</p>
 					</div>
 					<div className="flex flex-wrap items-center gap-3">
-						<button
-							type="button"
-							onClick={() => setAdding(!adding)}
-							className={`inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all ${
-								adding
-									? 'bg-slate-200 text-slate-700 hover:bg-slate-300'
-									: 'bg-amber-600 text-white shadow-md shadow-amber-200/50 hover:bg-amber-700 hover:shadow-lg'
-							}`}
+						<select
+							value={selectMonth}
+							onChange={(e) => setSelectMonth(Number(e.target.value))}
+							className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-all hover:border-amber-300 focus:border-amber-400"
 						>
-							<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-							{adding ? 'Cancel' : 'Add Employee'}
+							{Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+								<option key={m} value={m}>{new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(selectYear, m - 1))}</option>
+							))}
+						</select>
+						<select
+							value={selectYear}
+							onChange={(e) => setSelectYear(Number(e.target.value))}
+							className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm outline-none transition-all hover:border-amber-300 focus:border-amber-400"
+						>
+							{Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i).map((y) => (
+								<option key={y} value={y}>{y}</option>
+							))}
+						</select>
+						<button
+							onClick={handleFetchPayroll}
+							className="rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800"
+						>
+							Load
 						</button>
 						<select
 							value={branchFilter}
@@ -365,79 +350,6 @@ function Payroll() {
 						</select>
 					</div>
 				</div>
-
-				{adding && (
-					<div className="mt-6 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50/50 p-6 shadow-inner">
-						<div className="flex items-center gap-2.5 text-amber-900">
-							<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" /></svg>
-							<span className="text-base font-semibold">New Employee — {monthLabel} {currentYear}</span>
-						</div>
-						<div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Full name *</label>
-								<input placeholder="e.g. Md. Ariful Haque" value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Joining Date</label>
-								<input type="date" value={form.joiningDate} onChange={(e) => setForm((p) => ({ ...p, joiningDate: e.target.value }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Designation</label>
-								<input placeholder="e.g. General Staff" value={form.designation} onChange={(e) => setForm((p) => ({ ...p, designation: e.target.value }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Kafala Status</label>
-								<select value={form.kafalaStatus} onChange={(e) => setForm((p) => ({ ...p, kafalaStatus: e.target.value }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50">
-									<option>Under Kafala</option>
-									<option>Outside Kafala</option>
-									<option>Saudi</option>
-									<option>Sariatul Binmishal</option>
-								</select>
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Branch</label>
-								<input placeholder="e.g. Riyadh" value={form.branchName} onChange={(e) => setForm((p) => ({ ...p, branchName: e.target.value }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Basic</label>
-								<input type="number" placeholder="0" value={form.basic || ''} onChange={(e) => setForm((p) => ({ ...p, basic: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">House Rent</label>
-								<input type="number" placeholder="0" value={form.houseRent || ''} onChange={(e) => setForm((p) => ({ ...p, houseRent: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Food</label>
-								<input type="number" placeholder="0" value={form.food || ''} onChange={(e) => setForm((p) => ({ ...p, food: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Commission</label>
-								<input type="number" placeholder="0" value={form.commission || ''} onChange={(e) => setForm((p) => ({ ...p, commission: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-							<div>
-								<label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-amber-800/70">Per Day Payment</label>
-								<input type="number" placeholder="0 (auto-calc from Basic)" value={form.perDayPayment || ''} onChange={(e) => setForm((p) => ({ ...p, perDayPayment: Number(e.target.value) }))} className="w-full rounded-lg border border-amber-200 bg-white px-4 py-2.5 text-sm outline-none transition-all focus:border-amber-400 focus:ring-2 focus:ring-amber-200/50" />
-							</div>
-						</div>
-						<div className="mt-5 flex items-center gap-3">
-							<button
-								type="button"
-								onClick={handleAddToPayroll}
-								className="inline-flex items-center gap-2 rounded-lg bg-amber-600 px-6 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:bg-amber-700 hover:shadow-lg"
-							>
-								<svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-								Save &amp; Add to Payroll
-							</button>
-							<button
-								type="button"
-								onClick={() => setAdding(false)}
-								className="rounded-lg px-5 py-2.5 text-sm font-semibold text-slate-500 transition-all hover:bg-slate-100"
-							>
-								Cancel
-							</button>
-						</div>
-					</div>
-				)}
 
 				<div className="mt-6 -mx-8">
 					<div className="overflow-x-auto pb-2">

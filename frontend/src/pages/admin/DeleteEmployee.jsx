@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useOutletContext, Link } from 'react-router-dom'
 import { toast } from 'react-hot-toast'
+import { employeeApi, payrollApi } from '../../services/payrollApi.js'
 
 function DeleteEmployee() {
 	const { employees, setEmployees, branches, setBranches, payrollRows, setPayrollRows } = useOutletContext()
@@ -22,27 +23,44 @@ function DeleteEmployee() {
 		return matchesSearch && matchesBranch
 	})
 
-	const handleDeleteConfirm = () => {
+	const handleDeleteConfirm = async () => {
 		if (!confirmingDelete) return
 
 		const empToDelete = confirmingDelete
+		const empId = empToDelete._id || empToDelete.id
+		const fallbackId = empToDelete.id
 
-		// 1. Remove from employees list
-		setEmployees((prev) => prev.filter((emp) => emp.id !== empToDelete.id))
+		try {
+			await employeeApi.delete(empId)
 
-		// 2. Remove from payroll calculations
-		setPayrollRows((prev) => prev.filter((row) => row.employeeId !== empToDelete.id))
+			const deletePromises = []
+			payrollRows.forEach((row) => {
+				const rowEmpId = row.employee?._id || row.employeeId
+				if (rowEmpId === empId || rowEmpId === fallbackId) {
+					if (row._id) deletePromises.push(payrollApi.delete(row._id))
+				}
+			})
+			await Promise.allSettled(deletePromises)
 
-		// 3. Decrement branch employees count
-		setBranches((prev) =>
-			prev.map((b) =>
-				b.name === empToDelete.branch
-					? { ...b, employees: Math.max(0, b.employees - 1) }
-					: b
+			setEmployees((prev) => prev.filter((emp) => (emp._id || emp.id) !== empId && emp.id !== fallbackId))
+			setPayrollRows((prev) =>
+				prev.filter((row) => {
+					const rowEmpId = row.employee?._id || row.employeeId
+					return rowEmpId !== empId && rowEmpId !== fallbackId
+				})
 			)
-		)
+			setBranches((prev) =>
+				prev.map((b) =>
+					b.name === empToDelete.branch
+						? { ...b, employees: Math.max(0, b.employees - 1) }
+						: b
+				)
+			)
 
-		toast.success(`${empToDelete.name} has been deleted from records.`)
+			toast.success(`${empToDelete.name} has been deleted from all records.`)
+		} catch {
+			toast.error('Failed to delete employee from server.')
+		}
 		setConfirmingDelete(null)
 	}
 

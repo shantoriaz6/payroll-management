@@ -22,7 +22,7 @@ function calcDerived(fields) {
 const createPayrollEntry = asyncHandler(async (req, res) => {
     const derived = calcDerived(req.body);
     const entry = await PayrollEntry.create({ ...req.body, ...derived });
-    const populated = await entry.populate('employee', 'name designation kafalaStatus branchName');
+    const populated = await entry.populate('employee', 'name designation kafalaStatus branchName joiningDate');
     return res.status(201).json(new apiResponse(201, populated, 'Payroll entry created'));
 });
 
@@ -34,13 +34,13 @@ const getAllPayrollEntries = asyncHandler(async (req, res) => {
     else filter.year = new Date().getFullYear();
 
     const entries = await PayrollEntry.find(filter)
-        .populate('employee', 'name designation kafalaStatus branchName')
+        .populate('employee', 'name designation kafalaStatus branchName joiningDate')
         .sort({ slNo: 1 });
     return res.status(200).json(new apiResponse(200, entries));
 });
 
 const getPayrollEntryById = asyncHandler(async (req, res) => {
-    const entry = await PayrollEntry.findById(req.params.id).populate('employee', 'name designation kafalaStatus branchName');
+    const entry = await PayrollEntry.findById(req.params.id).populate('employee', 'name designation kafalaStatus branchName joiningDate');
     if (!entry) throw new apiError(404, 'Payroll entry not found');
     return res.status(200).json(new apiResponse(200, entry));
 });
@@ -64,7 +64,7 @@ const updatePayrollEntry = asyncHandler(async (req, res) => {
         req.params.id,
         { ...merged, ...derived },
         { new: true, runValidators: true }
-    ).populate('employee', 'name designation kafalaStatus branchName');
+    ).populate('employee', 'name designation kafalaStatus branchName joiningDate');
     return res.status(200).json(new apiResponse(200, entry, 'Payroll entry updated'));
 });
 
@@ -113,7 +113,7 @@ const generatePayroll = asyncHandler(async (req, res) => {
     }
 
     const populated = await PayrollEntry.find({ month, year })
-        .populate('employee', 'name designation kafalaStatus branchName')
+        .populate('employee', 'name designation kafalaStatus branchName joiningDate')
         .sort({ slNo: 1 });
 
     return res.status(200).json(new apiResponse(200, populated, 'Payroll generated'));

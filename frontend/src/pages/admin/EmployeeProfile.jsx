@@ -1,5 +1,6 @@
 import { Link, useParams, useOutletContext } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import toast from 'react-hot-toast'
 import { formatCurrency } from './adminData.js'
 import { employeeApi } from '../../services/payrollApi.js'
 
@@ -9,6 +10,7 @@ function EmployeeProfile() {
 	const [employee, setEmployee] = useState(
 		employees.find((item) => (item.id || item._id) === employeeId) || null
 	)
+	const [newPromo, setNewPromo] = useState({ year: '', title: '', salary: '' })
 
 	useEffect(() => {
 		const fromContext = employees.find((item) => (item.id || item._id) === employeeId)
@@ -40,12 +42,41 @@ function EmployeeProfile() {
 	const detailCards = [
 		{ label: 'Employee ID', value: employee.id || employee._id },
 		{ label: 'Company', value: employee.company ?? 'Bin Mishal Travells' },
-		{ label: 'Branch', value: employee.branch },
-		{ label: 'Department', value: employee.department ?? '—' },
-		{ label: 'Worker Type', value: employee.workerType ?? '—' },
-		{ label: 'Status', value: employee.status },
+		{ label: 'Branch', value: employee.branchName || employee.branch || '—' },
+		{ label: 'Department', value: employee.department || '—' },
+		{ label: 'Worker Type', value: employee.kafalaStatus || employee.workerType || '—' },
+		{ label: 'Status', value: employee.status || 'Active' },
 	]
 	const promotionHistory = employee.promotionHistory ?? []
+
+	const handleAddPromotion = async () => {
+		if (!newPromo.year || !newPromo.title || !newPromo.salary) {
+			return toast.error('Please fill year, title and salary')
+		}
+		const updated = [
+			...promotionHistory,
+			{ year: Number(newPromo.year), title: newPromo.title, salary: Number(newPromo.salary) },
+		]
+		try {
+			const res = await employeeApi.update(employee._id, { promotionHistory: updated })
+			if (res.data?.data) setEmployee(res.data.data)
+			setNewPromo({ year: '', title: '', salary: '' })
+			toast.success('Promotion added')
+		} catch {
+			toast.error('Failed to save')
+		}
+	}
+
+	const handleDeletePromotion = async (index) => {
+		const updated = promotionHistory.filter((_, i) => i !== index)
+		try {
+			const res = await employeeApi.update(employee._id, { promotionHistory: updated })
+			if (res.data?.data) setEmployee(res.data.data)
+			toast.success('Entry removed')
+		} catch {
+			toast.error('Failed to save')
+		}
+	}
 
 	return (
 		<section className="rounded-[2rem] border border-white/80 bg-white/82 p-6 shadow-[0_24px_60px_rgba(15,23,42,0.1)] backdrop-blur-xl">
@@ -63,9 +94,9 @@ function EmployeeProfile() {
 					<div>
 						<p className="text-[0.7rem] font-semibold uppercase tracking-[0.34em] text-amber-700/80">Employee profile</p>
 						<h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-900">{employee.name}</h2>
-						<p className="mt-2 text-sm text-slate-600">{employee.role || employee.designation || '—'} • {employee.branch || employee.branchName || '—'}</p>
+						<p className="mt-2 text-sm text-slate-600">{employee.role || employee.designation || '—'} • {employee.branchName || employee.branch || '—'}</p>
 						<div className="mt-4 flex flex-wrap gap-2">
-							<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white">{employee.workerType}</span>
+							<span className="rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-white">{employee.kafalaStatus || employee.workerType}</span>
 							<span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-amber-800">{employee.department}</span>
 							<span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-emerald-800">{employee.status}</span>
 						</div>
@@ -103,7 +134,7 @@ function EmployeeProfile() {
 					<div className="mt-4 rounded-[1.5rem] border border-slate-200 bg-white p-4 shadow-sm">
 						<p className="text-sm font-semibold text-slate-900">Employee snapshot</p>
 						<p className="mt-2 text-sm leading-7 text-slate-600">
-							{employee.name} works as a {employee.role || employee.designation || '—'} in {employee.branch || employee.branchName || '—'} under {(employee.workerType || employee.kafalaStatus || '—').toLowerCase()}.
+							{employee.name} works as a {employee.role || employee.designation || '—'} in {employee.branchName || employee.branch || '—'} under {(employee.kafalaStatus || employee.workerType || '—').toLowerCase()}.
 						</p>
 					</div>
 				</div>
@@ -116,16 +147,56 @@ function EmployeeProfile() {
 						</div>
 					</div>
 
+					<div className="mt-5 grid grid-cols-3 gap-3">
+						<input
+							type="number"
+							placeholder="Year"
+							value={newPromo.year}
+							onChange={(e) => setNewPromo({ ...newPromo, year: e.target.value })}
+							className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-amber-400"
+						/>
+						<input
+							placeholder="Title / Post"
+							value={newPromo.title}
+							onChange={(e) => setNewPromo({ ...newPromo, title: e.target.value })}
+							className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-amber-400"
+						/>
+						<input
+							type="number"
+							placeholder="Salary"
+							value={newPromo.salary}
+							onChange={(e) => setNewPromo({ ...newPromo, salary: e.target.value })}
+							className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none focus:border-amber-400"
+						/>
+					</div>
+					<button
+						onClick={handleAddPromotion}
+						className="mt-3 rounded-xl bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800"
+					>
+						Add Promotion
+					</button>
+
 					<div className="mt-5 space-y-3">
-						{promotionHistory.map((entry) => (
-							<div key={`${entry.year}-${entry.title}`} className="flex items-center justify-between gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-4">
+						{promotionHistory.map((entry, i) => (
+							<div key={`${entry.year}-${entry.title}-${i}`} className="flex items-center justify-between gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50 px-4 py-4">
 								<div>
 									<p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">{entry.year}</p>
 									<p className="mt-1 text-base font-semibold text-slate-950">{entry.title}</p>
 								</div>
-								<p className="text-lg font-semibold text-slate-900">{formatCurrency(entry.salary)}</p>
+								<div className="flex items-center gap-3">
+									<p className="text-lg font-semibold text-slate-900">{formatCurrency(entry.salary)}</p>
+									<button
+										onClick={() => handleDeletePromotion(i)}
+										className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+									>
+										Delete
+									</button>
+								</div>
 							</div>
 						))}
+						{promotionHistory.length === 0 && (
+							<p className="text-center text-sm text-slate-400 py-6">No promotions recorded yet. Add one above.</p>
+						)}
 					</div>
 				</div>
 			</div>

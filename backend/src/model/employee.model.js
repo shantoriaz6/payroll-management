@@ -22,6 +22,10 @@ const employeeSchema = new Schema(
             type: String,
             trim: true,
         },
+        department: {
+            type: String,
+            trim: true,
+        },
         kafalaStatus: {
             type: String,
             trim: true,
@@ -69,6 +73,13 @@ const employeeSchema = new Schema(
                 fileName: { type: String },
                 url: { type: String },
                 publicId: { type: String },
+            },
+        ],
+        promotionHistory: [
+            {
+                year: { type: Number },
+                title: { type: String },
+                salary: { type: Number },
             },
         ],
     },

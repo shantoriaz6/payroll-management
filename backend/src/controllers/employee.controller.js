@@ -30,26 +30,14 @@ const createEmployee = asyncHandler(async (req, res) => {
         const titles = Array.isArray(req.body.legalDocTitle)
             ? req.body.legalDocTitle
             : [req.body.legalDocTitle];
-        const docs = [];
-        for (let i = 0; i < req.files.legalDocFile.length; i++) {
-            const localUrl = saveLocalCopy(req.files.legalDocFile[i].path, req.files.legalDocFile[i].originalname);
-            const result = await uploadOnCloudinary(req.files.legalDocFile[i].path);
-            if (result) {
-                docs.push({
-                    title: titles[i] || '',
-                    fileName: req.files.legalDocFile[i].originalname,
-                    url: result.secure_url,
-                    publicId: result.public_id,
-                });
-            } else {
-                docs.push({
-                    title: titles[i] || '',
-                    fileName: req.files.legalDocFile[i].originalname,
-                    url: localUrl,
-                });
-            }
-        }
-        body.legalDocuments = docs;
+        const uploadPromises = req.files.legalDocFile.map(async (file, i) => {
+            const localUrl = saveLocalCopy(file.path, file.originalname);
+            const result = await uploadOnCloudinary(file.path);
+            return result
+                ? { title: titles[i] || '', fileName: file.originalname, url: result.secure_url, publicId: result.public_id }
+                : { title: titles[i] || '', fileName: file.originalname, url: localUrl };
+        });
+        body.legalDocuments = await Promise.all(uploadPromises);
     }
 
     const employee = await Employee.create(body);
@@ -84,25 +72,14 @@ const updateEmployee = asyncHandler(async (req, res) => {
         const titles = Array.isArray(req.body.legalDocTitle)
             ? req.body.legalDocTitle
             : [req.body.legalDocTitle];
-        const newDocs = [];
-        for (let i = 0; i < req.files.legalDocFile.length; i++) {
-            const localUrl = saveLocalCopy(req.files.legalDocFile[i].path, req.files.legalDocFile[i].originalname);
-            const result = await uploadOnCloudinary(req.files.legalDocFile[i].path);
-            if (result) {
-                newDocs.push({
-                    title: titles[i] || '',
-                    fileName: req.files.legalDocFile[i].originalname,
-                    url: result.secure_url,
-                    publicId: result.public_id,
-                });
-            } else {
-                newDocs.push({
-                    title: titles[i] || '',
-                    fileName: req.files.legalDocFile[i].originalname,
-                    url: localUrl,
-                });
-            }
-        }
+        const uploadPromises = req.files.legalDocFile.map(async (file, i) => {
+            const localUrl = saveLocalCopy(file.path, file.originalname);
+            const result = await uploadOnCloudinary(file.path);
+            return result
+                ? { title: titles[i] || '', fileName: file.originalname, url: result.secure_url, publicId: result.public_id }
+                : { title: titles[i] || '', fileName: file.originalname, url: localUrl };
+        });
+        const newDocs = await Promise.all(uploadPromises);
         body.legalDocuments = [...existingDocs, ...newDocs];
         delete body['legalDocTitle'];
     }

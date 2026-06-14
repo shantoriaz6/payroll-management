@@ -12,6 +12,16 @@ dotenv.config({
 console.log("CORS_ORIGIN from .env:", process.env.CORS_ORIGIN);
 console.log("PORT from .env:", process.env.PORT);
 
+process.on("uncaughtException", (err) => {
+    console.error("[FATAL] Uncaught exception:", err);
+    process.exit(1);
+});
+
+process.on("unhandledRejection", (reason, promise) => {
+    console.error("[FATAL] Unhandled rejection at:", promise, "reason:", reason);
+    process.exit(1);
+});
+
 const [{ default: connectDB }, { app }] = await Promise.all([
     import("./db/index.js"),
     import("./app.js"),

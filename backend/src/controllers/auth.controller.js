@@ -36,10 +36,11 @@ const loginAdmin = asyncHandler(async (req, res) => {
 
     const loggedInAdmin = await Admin.findById(admin._id).select('-password -refreshToken');
 
+    const isProduction = process.env.NODE_ENV === 'production';
     const options = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
+        secure: isProduction,
+        sameSite: isProduction ? 'strict' : 'lax',
     };
 
     return res
@@ -66,9 +67,11 @@ const logoutAdmin = asyncHandler(async (req, res) => {
         { new: true }
     );
 
+    const isProduction = process.env.NODE_ENV === 'production';
     const options = {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isProduction,
+        sameSite: isProduction ? 'strict' : 'lax',
     };
 
     return res
@@ -95,9 +98,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
         const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(admin._id);
 
+        const isProduction = process.env.NODE_ENV === 'production';
         const options = {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: isProduction,
+            sameSite: isProduction ? 'strict' : 'lax',
         };
 
         return res
